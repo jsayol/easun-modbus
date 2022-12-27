@@ -1,4 +1,4 @@
-import { EASUN, SerialPortOptions } from "./easun";
+import { EASUN } from "./easun";
 import config from "./config.json";
 
 interface OrigAddressConfig {
@@ -20,77 +20,55 @@ function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function test(): Promise<void> {
-    const easun = new EASUN("/dev/ttyUSB0");
-    await easun.connect();
+// async function test(): Promise<void> {
+//     const easun = new EASUN("/dev/ttyUSB0");
+//     await easun.connect();
 
-    // const info = {
-    //     "ctl": "lblNameTotal2",
-    //     "visible": 1,
-    //     "name": "Load consum energy total",
-    //     "address": 61498,
-    //     "len": 2,
-    //     "rate": 0.1,
-    //     "format": "%.1f",
-    //     "unit": "kWh"
-    // };
+//     const info = {
+//         "ctl": "cmbStatistic",
+//         "name": "Battery charge energy",
+//         "address": 61447,
+//         "len": 7,
+//         "rate": 1,
+//         "format": "%d",
+//         "unit": "Ah"
+//     };
 
-    // const info = {
-    //     "ctl": "lblNameLineV",
-    //     "visible": 1,
-    //     "name": "Line voltage",
-    //     "address": 531,
-    //     "len": 1,
-    //     "rate": 0.1,
-    //     "format": "%.1f",
-    //     "unit": "V"
-    // };
+//     const num = await easun._readNumber(info);
+//     console.log(info.name + "(" + info.unit + "): " + num);
 
-    const info = {
-        "ctl": "cmbStatistic",
-        "name": "Battery charge energy",
-        "address": 61447,
-        "len": 7,
-        "rate": 1,
-        "format": "%d",
-        "unit": "Ah"
-    };
+//     process.exit();
+// }
 
-    const num = await easun.readNumber(info);
-    console.log(info.name + "(" + info.unit + "): " + num);
+// async function info() {
+//     const easun = new EASUN("/dev/ttyUSB0");
+//     await easun.connect();
 
-    process.exit();
-}
+//     const items = config.information.item as Array<OrigAddressConfig>;
 
-async function info() {
-    const easun = new EASUN("/dev/ttyUSB0");
-    await easun.connect();
+//     for (const item of items) {
+//         if ((typeof item.address === "number") && (item.len <= 4)) {
+//             const num = await easun.readNumberFormatted(item as any);
+//             console.log(item.ename + ": " + num);
+//             await sleep(10);
+//         }
+//     }
+// }
 
-    const items = config.information.item as Array<OrigAddressConfig>;
+// async function params() {
+//     const easun = new EASUN("/dev/ttyUSB0");
+//     await easun.connect();
 
-    for (const item of items) {
-        if ((typeof item.address === "number") && (item.len <= 4)) {
-            const num = await easun.readNumberFormatted(item as any);
-            console.log(item.ename + ": " + num);
-            await sleep(10);
-        }
-    }
-}
+//     const items = config.parameters.item as Array<OrigAddressConfig>;
 
-async function params() {
-    const easun = new EASUN("/dev/ttyUSB0");
-    await easun.connect();
-
-    const items = config.parameters.item as Array<OrigAddressConfig>;
-
-    for (const item of items) {
-        if ((typeof item.address === "number") && (item.len === 1)) {
-            const num = await easun.readNumberFormatted(item as any);
-            console.log(item.ename + ": " + num);
-            await sleep(config.app.infoInterval);
-        }
-    }
-}
+//     for (const item of items) {
+//         if ((typeof item.address === "number") && (item.len === 1)) {
+//             const num = await easun.readNumberFormatted(item as any);
+//             console.log(item.ename + ": " + num);
+//             await sleep(config.app.infoInterval);
+//         }
+//     }
+// }
 
 async function api(): Promise<void> {
     const easun = new EASUN("/dev/ttyUSB0");
@@ -99,7 +77,33 @@ async function api(): Promise<void> {
     // console.log(await easun.getMaxChargerCurrent());
     // console.log(await easun.setMaxChargerCurrent(42.5));
     // console.log(await easun.getMaxChargerCurrent());
-    console.log(await easun.getMachineState());
+
+    // console.log("getStats_BatteryChargeTotal", await easun.getStats_BatteryChargeTotal(true));
+    // console.log("getStats_PVGenerateEnergyTotal", await easun.getStats_PVGenerateEnergyTotal(true));
+    // console.log("getStats_WorkTimeTotalInInverter", await easun.getStats_WorkTimeTotalInInverter(true));
+    // console.log("getStats_BatteryDischargeTotal", await easun.getStats_BatteryDischargeTotal(true));
+    // console.log("getStats_LoadConsumEnergyTotal", await easun.getStats_LoadConsumEnergyTotal(true));
+    // console.log("getStats_WorkTimeTotalInLine", await easun.getStats_WorkTimeTotalInLine(true));
+    // console.log("getStatsWeek_PVEnergy", await easun.getStatsWeek_PVEnergy(true));
+    // console.log("getStatsWeek_BatteryChargeEnergy", await easun.getStatsWeek_BatteryChargeEnergy(true));
+    // console.log("getStatsWeek_BatteryDischargeEnergy", await easun.getStatsWeek_BatteryDischargeEnergy(true));
+    // console.log("getStatsWeek_LineChargeEnergy", await easun.getStatsWeek_LineChargeEnergy(true));
+    // console.log("getStatsWeek_LoadConsumEnergy", await easun.getStatsWeek_LoadConsumEnergy(true));
+    // console.log("getStatsWeek_LoadConsumEnergyFromLine", await easun.getStatsWeek_LoadConsumEnergyFromLine(true));
+    // console.log("getStatsDay_PVEnergy", await easun.getStatsDay_PVEnergy(true));
+    // console.log("getStatsDay_BatteryChargeEnergy", await easun.getStatsDay_BatteryChargeEnergy(true));
+    // console.log("getStatsDay_BatteryDischargeEnergy", await easun.getStatsDay_BatteryDischargeEnergy(true));
+    // console.log("getStatsDay_LineChargeEnergy", await easun.getStatsDay_LineChargeEnergy(true));
+    // console.log("getStatsDay_LoadConsumEnergy", await easun.getStatsDay_LoadConsumEnergy(true));
+    // console.log("getStatsDay_LoadConsumEnergyFromLine", await easun.getStatsDay_LoadConsumEnergyFromLine(true));
+
+    console.log(await easun.getCustomerID());
+    console.log(await easun.getInputPassword());
+    console.log(await easun.getChangePassword());
+    console.log(await easun.getReserved());
+    console.log(await easun.getFunctionEnable1());
+    console.log(await easun.getFunctionEnable2());
+
 
 
     // const result = await easun.readAddress(ModbusDevice.ValueConfig.MainPageLog);

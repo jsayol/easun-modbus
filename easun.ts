@@ -16,19 +16,10 @@ interface AddressConfig {
     sel?: { item: Array<{ no: number, ename: string | number }> }
 }
 
-export interface MainConfig {
-    baudRate: number, // 9600,
-    dataBits: number, // 8,
-    flowControl: boolean, // false,
-    parity: 'none' | 'even' | 'mark' | 'odd' | 'space', // none
-    stopBit: number, // 1
-
-}
-
 export class EASUN {
     private static MODBUSID = 1;
     private static MINWAIT = 100; // ms
-    private static DEFAULT_TIMEOUT = 5000;
+    private static DEFAULT_TIMEOUT = 5000; // ms
     private static DEFAULT_OPTIONS: SerialPortOptions = {
         baudRate: 9600,
         dataBits: 8,
@@ -66,13 +57,15 @@ export class EASUN {
         this.client.setTimeout(value);
     }
 
-    /*private*/ async readAddress(config: AddressConfig): Promise<ReadRegisterResult | void> {
+    private async _readAddress(config: AddressConfig): Promise<ReadRegisterResult | void> {
         const now = Date.now();
         const sinceLast = now - this.lastOp;
 
         if (sinceLast < EASUN.MINWAIT) {
             await EASUN.sleep(EASUN.MINWAIT - sinceLast);
         }
+
+        this.lastOp = Date.now();
 
         try {
             return this.client.readHoldingRegisters(config.address, config.len);
@@ -81,41 +74,31 @@ export class EASUN {
         }
     }
 
-    async readNumber(config: AddressConfig): Promise<number | void> {
-        const result = await this.readAddress(config);
+    private async _readNumber(config: AddressConfig): Promise<number | void> {
+        const result = await this._readAddress(config);
 
         if (result) {
             const { data, buffer } = result;
 
             let value = 0;
             for (let i = 0; i < data.length; i++) {
-                value += data[i] << (i * 16);
+                value += data[i] << (i * 8);
             }
 
             return value / (1 / config.rate);
-
-            // if (config.signed === "S") {
-            //     num = buffer.readIntBE(0, 2 * config.len);
-            // } else {
-            //     num = buffer.readUIntBE(0, 2 * config.len);
-            // }
-
-            // return num / (1 / config.rate);
-
-
         }
     }
 
-    async readString(config: AddressConfig): Promise<string | void> {
-        const result = await this.readAddress(config);
+    private async _readString(config: AddressConfig): Promise<string | void> {
+        const result = await this._readAddress(config);
 
         if (result) {
             return String.fromCharCode(...result.data);
         }
     }
 
-    async readNumberFormatted(config: AddressConfig): Promise<string> {
-        const num = await this.readNumber(config);
+    private async _readNumberFormatted(config: AddressConfig): Promise<string> {
+        const num = await this._readNumber(config);
 
         if (typeof num !== "undefined") {
             return EASUN.formatNumber(num, config);
@@ -137,7 +120,7 @@ export class EASUN {
             stringNum = String(num);
         }
 
-        stringNum = stringNum + config.unit;
+        stringNum = stringNum + " " + config.unit;
 
         if (config.sel) {
             const item = config.sel.item.find(item => item.no === num);
@@ -150,6 +133,15 @@ export class EASUN {
     }
 
     async writeNumber(config: AddressConfig, value: number): Promise<WriteRegisterResult | void> {
+        const now = Date.now();
+        const sinceLast = now - this.lastOp;
+
+        if (sinceLast < EASUN.MINWAIT) {
+            await EASUN.sleep(EASUN.MINWAIT - sinceLast);
+        }
+
+        this.lastOp = Date.now();
+
         try {
             return this.client.writeRegister(config.address, Math.round(value / config.rate));
         } catch (err) {
@@ -997,6 +989,175 @@ export class EASUN {
 
     };
 
+    static StatsConfig: { [group: string]: { [name: string]: AddressConfig } } = {
+        Total: {
+            BatteryChargeTotal: {
+                "address": 61492,
+                "len": 2,
+                "rate": 1,
+                "maxLen": 8,
+                "format": "%d",
+                "unit": "Ah",
+                "name": "Battery charge total"
+            },
+            PVGenerateEnergyTotal: {
+                "address": 61496,
+                "len": 2,
+                "rate": 0.1,
+                "format": "%.1f",
+                "unit": "kWh",
+                "name": "PV generate energy total"
+            },
+            WorkTimeTotalInInverter: {
+                "address": 61514,
+                "len": 1,
+                "rate": 1,
+                "format": "%d",
+                "unit": "h",
+                "name": "Work time total in inverter"
+            },
+            BatteryDischargeTotal: {
+                "address": 61494,
+                "len": 2,
+                "rate": 1,
+                "format": "%d",
+                "unit": "Ah",
+                "name": "Battery discharge total"
+            },
+            LoadConsumEnergyTotal: {
+                "address": 61498,
+                "len": 2,
+                "rate": 0.1,
+                "format": "%.1f",
+                "unit": "kWh",
+                "name": "Load consum energy total"
+            },
+            WorkTimeTotalInLine: {
+                "address": 61515,
+                "len": 1,
+                "rate": 1,
+                "format": "%d",
+                "unit": "h",
+                "name": "Work time total in line"
+            },
+
+        },
+        Week: {
+            PVEnergy: {
+                "address": 61440,
+                "len": 7,
+                "rate": 0.1,
+                "format": "%.1f",
+                "unit": "kWh",
+                "name": "PV energy"
+            },
+            BatteryChargeEnergy: {
+                "address": 61447,
+                "len": 7,
+                "rate": 1,
+                "format": "%d",
+                "unit": "Ah",
+                "name": "Battery charge energy"
+            },
+            BatteryDischargeEnergy: {
+                "address": 61454,
+                "len": 7,
+                "rate": 1,
+                "format": "%d",
+                "unit": "Ah",
+                "name": "Battery discharge energy"
+            },
+            LineChargeEnergy: {
+                "address": 61461,
+                "len": 7,
+                "rate": 1,
+                "format": "%d",
+                "unit": "Ah",
+                "name": "Line charge energy"
+            },
+            LoadConsumEnergy: {
+                "address": 61468,
+                "len": 7,
+                "rate": 0.1,
+                "format": "%.1f",
+                "unit": "kWh",
+                "name": "Load consum energy"
+            },
+            LoadConsumEnergyFromLine: {
+                "address": 61475,
+                "len": 7,
+                "rate": 0.1,
+                "format": "%.1f",
+                "unit": "kWh",
+                "name": "Load consum energy from line"
+            },
+
+        },
+        Day: {
+            PVEnergy: {
+                "address": 61487,
+                "len": 1,
+                "rate": 0.1,
+                "format": "%.1f",
+                "unit": "kWh",
+                "name": "PV energy"
+            },
+            BatteryChargeEnergy: {
+                "address": 61485,
+                "len": 1,
+                "rate": 1,
+                "format": "%d",
+                "unit": "Ah",
+                "name": "Battery charge energy"
+            },
+            BatteryDischargeEnergy: {
+                "address": 61486,
+                "len": 1,
+                "rate": 1,
+                "format": "%d",
+                "unit": "Ah",
+                "name": "Battery discharge energy"
+            },
+            LineChargeEnergy: {
+                "address": 61500,
+                "len": 1,
+                "rate": 1,
+                "format": "%d",
+                "unit": "Ah",
+                "name": "Line charge energy"
+            },
+            LoadConsumEnergy: {
+                "address": 61488,
+                "len": 1,
+                "rate": 0.1,
+                "format": "%.1f",
+                "unit": "kWh",
+                "name": "Load consum energy"
+            },
+            LoadConsumEnergyFromLine: {
+                "address": 61501,
+                "len": 1,
+                "rate": 0.1,
+                "format": "%.1f",
+                "unit": "kWh",
+                "name": "Load consum energy from line"
+            },
+
+        },
+    };
+
+    private async _getNumberValue(format = false, config: AddressConfig): Promise<number | string | void> {
+        const num = await this._readNumber(config);
+
+        if (typeof num !== "undefined") {
+            if (format) {
+                return EASUN.formatNumber(num, config);
+            } else {
+                return num;
+            }
+        }
+    }
+
     /** Information */
 
     // getMainPageLog(): Promise<number | void> {
@@ -1004,157 +1165,207 @@ export class EASUN {
     // }
 
     getSoftwareVersion1(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.SoftwareVersion1);
+        return this._readNumber(EASUN.ValueConfig.SoftwareVersion1);
     }
 
     getSoftwareVersion2(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.SoftwareVersion2);
+        return this._readNumber(EASUN.ValueConfig.SoftwareVersion2);
     }
 
     getCompileTime(): Promise<string | void> {
         // When trying to read, some times we get a CRC error
-        return this.readString(EASUN.ValueConfig.CompileTime);
+        return this._readString(EASUN.ValueConfig.CompileTime);
     }
 
     getProductSN(): Promise<string | void> {
         // When trying to read, some times we get a CRC error
-        return this.readString(EASUN.ValueConfig.ProductSN);
+        return this._readString(EASUN.ValueConfig.ProductSN);
     }
 
     getPowerRate(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.PowerRate);
+        return this._readNumber(EASUN.ValueConfig.PowerRate);
     }
 
     getPVStatus(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.PVStatus);
+        return this._readNumber(EASUN.ValueConfig.PVStatus);
     }
 
     getLineStatus(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LineStatus);
+        return this._readNumber(EASUN.ValueConfig.LineStatus);
     }
 
     getBatteryStatus(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryStatus);
+        return this._readNumber(EASUN.ValueConfig.BatteryStatus);
     }
 
     getLoadStatus(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LoadStatus);
+        return this._readNumber(EASUN.ValueConfig.LoadStatus);
     }
 
     // getCurrentFault(): Promise<number | void> {
     //     return this.readNumber(ModbusDevice.ValueConfig.CurrentFault);
     // }
 
-    getPVVoltage1(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.PVVoltage1);
+    getPVVoltage1(format?: false): Promise<number | void>;
+    getPVVoltage1(format?: true): Promise<string | void>;
+    getPVVoltage1(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.PVVoltage1);
     }
 
-    getPVCurrent(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.PVCurrent);
+    getPVCurrent(format?: false): Promise<number | void>;
+    getPVCurrent(format?: true): Promise<string | void>;
+    getPVCurrent(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.PVCurrent);
     }
 
-    getPVPower(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.PVPower);
+    getPVPower(format?: false): Promise<number | void>;
+    getPVPower(format?: true): Promise<string | void>;
+    getPVPower(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.PVPower);
     }
 
-    getLineVoltage(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LineVoltage);
+    getLineVoltage(format?: false): Promise<number | void>;
+    getLineVoltage(format?: true): Promise<string | void>;
+    getLineVoltage(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.LineVoltage);
     }
 
-    getLineCurrent(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LineCurrent);
+    getLineCurrent(format?: false): Promise<number | void>;
+    getLineCurrent(format?: true): Promise<string | void>;
+    getLineCurrent(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.LineCurrent);
     }
 
-    getLineFrequency(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LineFrequency);
+    getLineFrequency(format?: false): Promise<number | void>;
+    getLineFrequency(format?: true): Promise<string | void>;
+    getLineFrequency(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.LineFrequency);
     }
 
-    getBatteryType(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryType);
+    getBatteryType(format?: false): Promise<number | void>;
+    getBatteryType(format?: true): Promise<string | void>;
+    getBatteryType(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryType);
     }
 
-    getBatteryVoltage(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryVoltage);
+    getBatteryVoltage(format?: false): Promise<number | void>;
+    getBatteryVoltage(format?: true): Promise<string | void>;
+    getBatteryVoltage(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryVoltage);
     }
 
-    getBatteryCurrent(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryCurrent);
+    getBatteryCurrent(format?: false): Promise<number | void>;
+    getBatteryCurrent(format?: true): Promise<string | void>;
+    getBatteryCurrent(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryCurrent);
     }
 
-    getBatterySOC(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatterySOC);
+    getBatterySOC(format?: false): Promise<number | void>;
+    getBatterySOC(format?: true): Promise<string | void>;
+    getBatterySOC(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatterySOC);
     }
 
-    getChgCurrentByLine(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.ChgCurrentByLine);
+    getChgCurrentByLine(format?: false): Promise<number | void>;
+    getChgCurrentByLine(format?: true): Promise<string | void>;
+    getChgCurrentByLine(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.ChgCurrentByLine);
     }
 
-    getLoadVoltage(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LoadVoltage);
+    getLoadVoltage(format?: false): Promise<number | void>;
+    getLoadVoltage(format?: true): Promise<string | void>;
+    getLoadVoltage(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.LoadVoltage);
     }
 
-    getLoadCurrent(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LoadCurrent);
+    getLoadCurrent(format?: false): Promise<number | void>;
+    getLoadCurrent(format?: true): Promise<string | void>;
+    getLoadCurrent(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.LoadCurrent);
     }
 
-    getLoadActivePower(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LoadActivePower);
+    getLoadActivePower(format?: false): Promise<number | void>;
+    getLoadActivePower(format?: true): Promise<string | void>;
+    getLoadActivePower(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.LoadActivePower);
     }
 
-    getLoadApparentPower(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LoadApparentPower);
+    getLoadApparentPower(format?: false): Promise<number | void>;
+    getLoadApparentPower(format?: true): Promise<string | void>;
+    getLoadApparentPower(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.LoadApparentPower);
     }
 
-    getLoadRatio(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LoadRatio);
+    getLoadRatio(format?: false): Promise<number | void>;
+    getLoadRatio(format?: true): Promise<string | void>;
+    getLoadRatio(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.LoadRatio);
     }
 
-    getTemperatureDC(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.TemperatureDC);
+    getTemperatureDC(format?: false): Promise<number | void>;
+    getTemperatureDC(format?: true): Promise<string | void>;
+    getTemperatureDC(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.TemperatureDC);
     }
 
-    getTemperatureAC(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.TemperatureAC);
+    getTemperatureAC(format?: false): Promise<number | void>;
+    getTemperatureAC(format?: true): Promise<string | void>;
+    getTemperatureAC(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.TemperatureAC);
     }
 
-    getTemperatureTR(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.TemperatureTR);
+    getTemperatureTR(format?: false): Promise<number | void>;
+    getTemperatureTR(format?: true): Promise<string | void>;
+    getTemperatureTR(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.TemperatureTR);
     }
 
-    getInverterCurrent(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.InverterCurrent);
+    getInverterCurrent(format?: false): Promise<number | void>;
+    getInverterCurrent(format?: true): Promise<string | void>;
+    getInverterCurrent(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.InverterCurrent);
     }
 
-    getInverterFrequency(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.InverterFrequency);
+    getInverterFrequency(format?: false): Promise<number | void>;
+    getInverterFrequency(format?: true): Promise<string | void>;
+    getInverterFrequency(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.InverterFrequency);
     }
 
     getMachineState(): Promise<EASUN.MachineState | void> {
-        return this.readNumber(EASUN.ValueConfig.MachineState);
+        return this._readNumber(EASUN.ValueConfig.MachineState);
     }
 
     getBatteryChargeStep(): Promise<EASUN.BatteryChargeStep | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryChargeStep);
+        return this._readNumber(EASUN.ValueConfig.BatteryChargeStep);
     }
 
     getOutputPriority(): Promise<EASUN.OutputPriority | void> {
-        return this.readNumber(EASUN.ValueConfig.OutputPriority);
+        return this._readNumber(EASUN.ValueConfig.OutputPriority);
     }
 
-    // getPVGenerateEnergyTotal(): Promise<number | void> {
-    //     return this.readNumber(ModbusDevice.ValueConfig.PVGenerateEnergyTotal);
-    // }
-
-    // getLoadConsumEnergyTotal(): Promise<number | void> {
-    //     return this.readNumber(ModbusDevice.ValueConfig.LoadConsumEnergyTotal);
-    // }
-
-    getPVGenerateEnergyToday(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.PVGenerateEnergyToday);
+    getPVGenerateEnergyTotal(format?: false): Promise<number | void>;
+    getPVGenerateEnergyTotal(format?: true): Promise<string | void>;
+    getPVGenerateEnergyTotal(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.PVGenerateEnergyTotal);
     }
 
-    getLoadConsumEnergyToday(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.LoadConsumEnergyToday);
+    getLoadConsumEnergyTotal(format?: false): Promise<number | void>;
+    getLoadConsumEnergyTotal(format?: true): Promise<string | void>;
+    getLoadConsumEnergyTotal(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.LoadConsumEnergyTotal);
+    }
+
+    getPVGenerateEnergyToday(format?: false): Promise<number | void>;
+    getPVGenerateEnergyToday(format?: true): Promise<string | void>;
+    getPVGenerateEnergyToday(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.PVGenerateEnergyToday);
+    }
+
+    getLoadConsumEnergyToday(format?: false): Promise<number | void>;
+    getLoadConsumEnergyToday(format?: true): Promise<string | void>;
+    getLoadConsumEnergyToday(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.LoadConsumEnergyToday);
     }
 
     /** Parameters */
@@ -1166,8 +1377,10 @@ export class EASUN {
         }
     }
 
-    getOutputFrequency(): Promise<EASUN.OutputFrequency | void> {
-        return this.readNumber(EASUN.ValueConfig.OutputFrequency);
+    getOutputFrequency(format?: false): Promise<EASUN.OutputFrequency | void>;
+    getOutputFrequency(format?: true): Promise<string | void>;
+    getOutputFrequency(format = false): Promise<EASUN.OutputFrequency | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.OutputFrequency);
     }
 
     async setOutputFrequency(value: EASUN.OutputFrequency): Promise<EASUN.OutputFrequency | void> {
@@ -1177,8 +1390,10 @@ export class EASUN {
         }
     }
 
-    getAcInputVoltageRange(): Promise<EASUN.AcInputVoltageRange | void> {
-        return this.readNumber(EASUN.ValueConfig.AcInputVoltageRange);
+    getAcInputVoltageRange(format?: false): Promise<EASUN.AcInputVoltageRange | void>;
+    getAcInputVoltageRange(format?: true): Promise<string | void>;
+    getAcInputVoltageRange(format = false): Promise<EASUN.AcInputVoltageRange | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.AcInputVoltageRange);
     }
 
     async setAcInputVoltageRange(value: EASUN.AcInputVoltageRange): Promise<EASUN.AcInputVoltageRange | void> {
@@ -1188,8 +1403,10 @@ export class EASUN {
         }
     }
 
-    getTurnToMainsVolt(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.TurnToMainsVolt);
+    getTurnToMainsVolt(format?: false): Promise<number | void>;
+    getTurnToMainsVolt(format?: true): Promise<string | void>;
+    getTurnToMainsVolt(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.TurnToMainsVolt);
     }
 
     async setTurnToMainsVolt(value: number): Promise<number | void> {
@@ -1199,8 +1416,10 @@ export class EASUN {
         }
     }
 
-    getTurnToInverterVolt(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.TurnToInverterVolt);
+    getTurnToInverterVolt(format?: false): Promise<number | void>;
+    getTurnToInverterVolt(format?: true): Promise<string | void>;
+    getTurnToInverterVolt(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.TurnToInverterVolt);
     }
 
     async setTurnToInverterVolt(value: number): Promise<number | void> {
@@ -1211,7 +1430,7 @@ export class EASUN {
     }
 
     getChargerSourcePriority(): Promise<EASUN.ChargerSourcePriority | void> {
-        return this.readNumber(EASUN.ValueConfig.ChargerSourcePriority);
+        return this._readNumber(EASUN.ValueConfig.ChargerSourcePriority);
     }
 
     async setChargerSourcePriority(value: EASUN.ChargerSourcePriority): Promise<EASUN.ChargerSourcePriority | void> {
@@ -1221,8 +1440,10 @@ export class EASUN {
         }
     }
 
-    getMaxChargerCurrent(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.MaxChargerCurrent);
+    getMaxChargerCurrent(format?: false): Promise<number | void>;
+    getMaxChargerCurrent(format?: true): Promise<string | void>;
+    getMaxChargerCurrent(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.MaxChargerCurrent);
     }
 
     async setMaxChargerCurrent(value: number): Promise<number | void> {
@@ -1239,8 +1460,10 @@ export class EASUN {
         }
     }
 
-    getBatteryBoostChargeVoltage(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryBoostChargeVoltage);
+    getBatteryBoostChargeVoltage(format?: false): Promise<number | void>;
+    getBatteryBoostChargeVoltage(format?: true): Promise<string | void>;
+    getBatteryBoostChargeVoltage(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryBoostChargeVoltage);
     }
 
     async setBatteryBoostChargeVoltage(value: number): Promise<number | void> {
@@ -1250,8 +1473,10 @@ export class EASUN {
         }
     }
 
-    getBatteryBoostChargeTime(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryBoostChargeTime);
+    getBatteryBoostChargeTime(format?: false): Promise<number | void>;
+    getBatteryBoostChargeTime(format?: true): Promise<string | void>;
+    getBatteryBoostChargeTime(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryBoostChargeTime);
     }
 
     async setBatteryBoostChargeTime(value: number): Promise<number | void> {
@@ -1261,8 +1486,10 @@ export class EASUN {
         }
     }
 
-    getBatteryFloatingChargeVoltage(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryFloatingChargeVoltage);
+    getBatteryFloatingChargeVoltage(format?: false): Promise<number | void>;
+    getBatteryFloatingChargeVoltage(format?: true): Promise<string | void>;
+    getBatteryFloatingChargeVoltage(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryFloatingChargeVoltage);
     }
 
     async setBatteryFloatingChargeVoltage(value: number): Promise<number | void> {
@@ -1272,8 +1499,10 @@ export class EASUN {
         }
     }
 
-    getBatteryOverDischargeVoltage(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryOverDischargeVoltage);
+    getBatteryOverDischargeVoltage(format?: false): Promise<number | void>;
+    getBatteryOverDischargeVoltage(format?: true): Promise<string | void>;
+    getBatteryOverDischargeVoltage(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryOverDischargeVoltage);
     }
 
     async setBatteryOverDischargeVoltage(value: number): Promise<number | void> {
@@ -1283,8 +1512,10 @@ export class EASUN {
         }
     }
 
-    getBatteryOverDischargeDelayTime(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryOverDischargeDelayTime);
+    getBatteryOverDischargeDelayTime(format?: false): Promise<number | void>;
+    getBatteryOverDischargeDelayTime(format?: true): Promise<string | void>;
+    getBatteryOverDischargeDelayTime(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryOverDischargeDelayTime);
     }
 
     async setBatteryOverDischargeDelayTime(value: number): Promise<number | void> {
@@ -1294,8 +1525,10 @@ export class EASUN {
         }
     }
 
-    getBatteryUnderVoltageAlarm(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryUnderVoltageAlarm);
+    getBatteryUnderVoltageAlarm(format?: false): Promise<number | void>;
+    getBatteryUnderVoltageAlarm(format?: true): Promise<string | void>;
+    getBatteryUnderVoltageAlarm(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryUnderVoltageAlarm);
     }
 
     async setBatteryUnderVoltageAlarm(value: number): Promise<number | void> {
@@ -1305,8 +1538,10 @@ export class EASUN {
         }
     }
 
-    getBatteryDischargeLimitVoltage(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryDischargeLimitVoltage);
+    getBatteryDischargeLimitVoltage(format?: false): Promise<number | void>;
+    getBatteryDischargeLimitVoltage(format?: true): Promise<string | void>;
+    getBatteryDischargeLimitVoltage(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryDischargeLimitVoltage);
     }
 
     async setBatteryDischargeLimitVoltage(value: number): Promise<number | void> {
@@ -1316,8 +1551,10 @@ export class EASUN {
         }
     }
 
-    getBatteryEqualizationEnable(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryEqualizationEnable);
+    getBatteryEqualizationEnable(format?: false): Promise<number | void>;
+    getBatteryEqualizationEnable(format?: true): Promise<string | void>;
+    getBatteryEqualizationEnable(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryEqualizationEnable);
     }
 
     async setBatteryEqualizationEnable(value: EASUN.BatteryEqualizationEnable): Promise<EASUN.BatteryEqualizationEnable | void> {
@@ -1327,8 +1564,10 @@ export class EASUN {
         }
     }
 
-    getBatteryEqualizationVoltage(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryEqualizationVoltage);
+    getBatteryEqualizationVoltage(format?: false): Promise<number | void>;
+    getBatteryEqualizationVoltage(format?: true): Promise<string | void>;
+    getBatteryEqualizationVoltage(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryEqualizationVoltage);
     }
 
     async setBatteryEqualizationVoltage(value: number): Promise<number | void> {
@@ -1338,8 +1577,10 @@ export class EASUN {
         }
     }
 
-    getBatteryEqualizedTime(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryEqualizedTime);
+    getBatteryEqualizedTime(format?: false): Promise<number | void>;
+    getBatteryEqualizedTime(format?: true): Promise<string | void>;
+    getBatteryEqualizedTime(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryEqualizedTime);
     }
 
     async setBatteryEqualizedTime(value: number): Promise<number | void> {
@@ -1349,8 +1590,10 @@ export class EASUN {
         }
     }
 
-    getBatteryEqualizedTimeOut(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryEqualizedTimeOut);
+    getBatteryEqualizedTimeOut(format?: false): Promise<number | void>;
+    getBatteryEqualizedTimeOut(format?: true): Promise<string | void>;
+    getBatteryEqualizedTimeOut(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryEqualizedTimeOut);
     }
 
     async setBatteryEqualizedTimeOut(value: number): Promise<number | void> {
@@ -1360,8 +1603,10 @@ export class EASUN {
         }
     }
 
-    getBatteryEqualizationInterval(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryEqualizationInterval);
+    getBatteryEqualizationInterval(format?: false): Promise<number | void>;
+    getBatteryEqualizationInterval(format?: true): Promise<string | void>;
+    getBatteryEqualizationInterval(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryEqualizationInterval);
     }
 
     async setBatteryEqualizationInterval(value: number): Promise<number | void> {
@@ -1371,8 +1616,8 @@ export class EASUN {
         }
     }
 
-    getBatteryEqualizationImmediately(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryEqualizationImmediately);
+    getBatteryEqualizationImmediately(): Promise<EASUN.BatteryEqualizationImmediately | void> {
+        return this._readNumber(EASUN.ValueConfig.BatteryEqualizationImmediately);
     }
 
     async setBatteryEqualizationImmediately(value: EASUN.BatteryEqualizationImmediately): Promise<EASUN.BatteryEqualizationImmediately | void> {
@@ -1382,8 +1627,8 @@ export class EASUN {
         }
     }
 
-    getPowerSavingMode(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.PowerSavingMode);
+    getPowerSavingMode(): Promise<EASUN.PowerSavingMode | void> {
+        return this._readNumber(EASUN.ValueConfig.PowerSavingMode);
     }
 
     async setPowerSavingMode(value: EASUN.PowerSavingMode): Promise<EASUN.PowerSavingMode | void> {
@@ -1393,8 +1638,8 @@ export class EASUN {
         }
     }
 
-    getRestartWhenOverLoad(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.RestartWhenOverLoad);
+    getRestartWhenOverLoad(): Promise<EASUN.RestartWhenOverLoad | void> {
+        return this._readNumber(EASUN.ValueConfig.RestartWhenOverLoad);
     }
 
     async setRestartWhenOverLoad(value: EASUN.RestartWhenOverLoad): Promise<EASUN.RestartWhenOverLoad | void> {
@@ -1404,8 +1649,8 @@ export class EASUN {
         }
     }
 
-    getRestartWhenOverTemperature(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.RestartWhenOverTemperature);
+    getRestartWhenOverTemperature(): Promise<EASUN.RestartWhenOverTemperature | void> {
+        return this._readNumber(EASUN.ValueConfig.RestartWhenOverTemperature);
     }
 
     async setRestartWhenOverTemperature(value: EASUN.RestartWhenOverTemperature): Promise<EASUN.RestartWhenOverTemperature | void> {
@@ -1415,8 +1660,8 @@ export class EASUN {
         }
     }
 
-    getAlarmEnable(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.AlarmEnable);
+    getAlarmEnable(): Promise<EASUN.AlarmEnable | void> {
+        return this._readNumber(EASUN.ValueConfig.AlarmEnable);
     }
 
     async setAlarmEnable(value: EASUN.AlarmEnable): Promise<EASUN.AlarmEnable | void> {
@@ -1426,8 +1671,8 @@ export class EASUN {
         }
     }
 
-    getInputChangeAlarm(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.InputChangeAlarm);
+    getInputChangeAlarm(): Promise<EASUN.InputChangeAlarm | void> {
+        return this._readNumber(EASUN.ValueConfig.InputChangeAlarm);
     }
 
     async setInputChangeAlarm(value: EASUN.InputChangeAlarm): Promise<EASUN.InputChangeAlarm | void> {
@@ -1437,8 +1682,8 @@ export class EASUN {
         }
     }
 
-    getBypassOutputWhenOverLoad(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BypassOutputWhenOverLoad);
+    getBypassOutputWhenOverLoad(): Promise<EASUN.BypassOutputWhenOverLoad | void> {
+        return this._readNumber(EASUN.ValueConfig.BypassOutputWhenOverLoad);
     }
 
     async setBypassOutputWhenOverLoad(value: EASUN.BypassOutputWhenOverLoad): Promise<EASUN.BypassOutputWhenOverLoad | void> {
@@ -1448,8 +1693,10 @@ export class EASUN {
         }
     }
 
-    getMaxACChargerCurrent(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.MaxACChargerCurrent);
+    getMaxACChargerCurrent(format?: false): Promise<number | void>;
+    getMaxACChargerCurrent(format?: true): Promise<string | void>;
+    getMaxACChargerCurrent(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.MaxACChargerCurrent);
     }
 
     async setMaxACChargerCurrent(value: number): Promise<number | void> {
@@ -1459,8 +1706,8 @@ export class EASUN {
         }
     }
 
-    getSplitPhase(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.SplitPhase);
+    getSplitPhase(): Promise<EASUN.BypassOutputWhenOverLoad | void> {
+        return this._readNumber(EASUN.ValueConfig.SplitPhase);
     }
 
     async setSplitPhase(value: EASUN.SplitPhase): Promise<EASUN.SplitPhase | void> {
@@ -1470,8 +1717,8 @@ export class EASUN {
         }
     }
 
-    getRS485Address(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.RS485Address);
+    getRS485Address(format = false): Promise<number | string | void> {
+        return this._readNumber(EASUN.ValueConfig.RS485Address);
     }
 
     async setRS485Address(value: number): Promise<number | void> {
@@ -1481,8 +1728,8 @@ export class EASUN {
         }
     }
 
-    getParallelMode(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.ParallelMode);
+    getParallelMode(): Promise<EASUN.ParallelMode | void> {
+        return this._readNumber(EASUN.ValueConfig.ParallelMode);
     }
 
     async setParallelMode(value: EASUN.ParallelMode): Promise<EASUN.ParallelMode | void> {
@@ -1492,8 +1739,8 @@ export class EASUN {
         }
     }
 
-    getBMSEnable(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BMSEnable);
+    getBMSEnable(): Promise<EASUN.BMSEnable | void> {
+        return this._readNumber(EASUN.ValueConfig.BMSEnable);
     }
 
     async setBMSEnable(value: EASUN.BMSEnable): Promise<EASUN.BMSEnable | void> {
@@ -1503,8 +1750,8 @@ export class EASUN {
         }
     }
 
-    getBMSProtocol(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BMSProtocol);
+    getBMSProtocol(): Promise<EASUN.BMSProtocol | void> {
+        return this._readNumber(EASUN.ValueConfig.BMSProtocol);
     }
 
     async setBMSProtocol(value: EASUN.BMSProtocol): Promise<EASUN.BMSProtocol | void> {
@@ -1515,7 +1762,7 @@ export class EASUN {
     }
 
     getReserved(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.Reserved);
+        return this._readNumber(EASUN.ValueConfig.Reserved);
     }
 
     async setReserved(value: number): Promise<number | void> {
@@ -1525,8 +1772,10 @@ export class EASUN {
         }
     }
 
-    getBatteryUndervoltageRecovery(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryUndervoltageRecovery);
+    getBatteryUndervoltageRecovery(format?: false): Promise<number | void>;
+    getBatteryUndervoltageRecovery(format?: true): Promise<string | void>;
+    getBatteryUndervoltageRecovery(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryUndervoltageRecovery);
     }
 
     async setBatteryUndervoltageRecovery(value: number): Promise<number | void> {
@@ -1536,8 +1785,10 @@ export class EASUN {
         }
     }
 
-    getMaxPVChargerCurrent(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.MaxPVChargerCurrent);
+    getMaxPVChargerCurrent(format?: false): Promise<number | void>;
+    getMaxPVChargerCurrent(format?: true): Promise<string | void>;
+    getMaxPVChargerCurrent(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.MaxPVChargerCurrent);
     }
 
     async setMaxPVChargerCurrent(value: number): Promise<number | void> {
@@ -1547,8 +1798,10 @@ export class EASUN {
         }
     }
 
-    getBatteryChargeRecovery(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.BatteryChargeRecovery);
+    getBatteryChargeRecovery(format?: false): Promise<number | void>;
+    getBatteryChargeRecovery(format?: true): Promise<string | void>;
+    getBatteryChargeRecovery(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.BatteryChargeRecovery);
     }
 
     async setBatteryChargeRecovery(value: number): Promise<number | void> {
@@ -1558,8 +1811,10 @@ export class EASUN {
         }
     }
 
-    getOutputVoltageSet(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.OutputVoltageSet);
+    getOutputVoltageSet(format?: false): Promise<number | void>;
+    getOutputVoltageSet(format?: true): Promise<string | void>;
+    getOutputVoltageSet(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.OutputVoltageSet);
     }
 
     async setOutputVoltageSet(value: number): Promise<number | void> {
@@ -1569,8 +1824,10 @@ export class EASUN {
         }
     }
 
-    getSystemDateTime(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.SystemDateTime);
+    getSystemDateTime(format?: false): Promise<number | void>;
+    getSystemDateTime(format?: true): Promise<string | void>;
+    getSystemDateTime(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.SystemDateTime);
     }
 
     async setSystemDateTime(value: number): Promise<number | void> {
@@ -1581,7 +1838,7 @@ export class EASUN {
     }
 
     getInputPassword(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.InputPassword);
+        return this._readNumber(EASUN.ValueConfig.InputPassword);
     }
 
     async setInputPassword(value: number): Promise<number | void> {
@@ -1592,7 +1849,7 @@ export class EASUN {
     }
 
     getChangePassword(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.ChangePassword);
+        return this._readNumber(EASUN.ValueConfig.ChangePassword);
     }
 
     async setChangePassword(value: number): Promise<number | void> {
@@ -1603,7 +1860,7 @@ export class EASUN {
     }
 
     getCustomerID(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.CustomerID);
+        return this._readNumber(EASUN.ValueConfig.CustomerID);
     }
 
     async setCustomerID(value: number): Promise<number | void> {
@@ -1620,8 +1877,10 @@ export class EASUN {
         }
     }
 
-    getPVVoltageRate(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.PVVoltageRate);
+    getPVVoltageRate(format?: false): Promise<number | void>;
+    getPVVoltageRate(format?: true): Promise<string | void>;
+    getPVVoltageRate(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.PVVoltageRate);
     }
 
     async setPVVoltageRate(value: number): Promise<number | void> {
@@ -1631,8 +1890,10 @@ export class EASUN {
         }
     }
 
-    getMaxChargeCurrentByPV(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.MaxChargeCurrentByPV);
+    getMaxChargeCurrentByPV(format?: false): Promise<number | void>;
+    getMaxChargeCurrentByPV(format?: true): Promise<string | void>;
+    getMaxChargeCurrentByPV(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.MaxChargeCurrentByPV);
     }
 
     async setMaxChargeCurrentByPV(value: number): Promise<number | void> {
@@ -1643,7 +1904,7 @@ export class EASUN {
     }
 
     getFunctionEnable1(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.FunctionEnable1);
+        return this._readNumber(EASUN.ValueConfig.FunctionEnable1);
     }
 
     async setFunctionEnable1(value: number): Promise<number | void> {
@@ -1654,7 +1915,7 @@ export class EASUN {
     }
 
     getFunctionEnable2(): Promise<number | void> {
-        return this.readNumber(EASUN.ValueConfig.FunctionEnable2);
+        return this._readNumber(EASUN.ValueConfig.FunctionEnable2);
     }
 
     async setFunctionEnable2(value: number): Promise<number | void> {
@@ -1663,6 +1924,134 @@ export class EASUN {
             return result.value;
         }
     }
+
+    /** Statistics **/
+    getStats_BatteryChargeTotal(format?: false): Promise<number | void>;
+    getStats_BatteryChargeTotal(format?: true): Promise<string | void>;
+    getStats_BatteryChargeTotal(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Total.BatteryChargeTotal);
+    }
+
+    getStats_PVGenerateEnergyTotal(format?: false): Promise<number | void>;
+    getStats_PVGenerateEnergyTotal(format?: true): Promise<string | void>;
+    getStats_PVGenerateEnergyTotal(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Total.PVGenerateEnergyTotal);
+    }
+
+    getStats_WorkTimeTotalInInverter(format?: false): Promise<number | void>;
+    getStats_WorkTimeTotalInInverter(format?: true): Promise<string | void>;
+    getStats_WorkTimeTotalInInverter(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Total.WorkTimeTotalInInverter);
+    }
+
+    getStats_BatteryDischargeTotal(format?: false): Promise<number | void>;
+    getStats_BatteryDischargeTotal(format?: true): Promise<string | void>;
+    getStats_BatteryDischargeTotal(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Total.BatteryDischargeTotal);
+    }
+
+    getStats_LoadConsumEnergyTotal(format?: false): Promise<number | void>;
+    getStats_LoadConsumEnergyTotal(format?: true): Promise<string | void>;
+    getStats_LoadConsumEnergyTotal(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Total.LoadConsumEnergyTotal);
+    }
+
+    getStats_WorkTimeTotalInLine(format?: false): Promise<number | void>;
+    getStats_WorkTimeTotalInLine(format?: true): Promise<string | void>;
+    getStats_WorkTimeTotalInLine(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Total.WorkTimeTotalInLine);
+    }
+
+    private async _getStatsWeekValue(format = false, config: AddressConfig): Promise<Array<number> | Array<string> | void> {
+        const result = await this._readAddress(config);
+        if (result) {
+            let values = result.data.map(value => value / (1 / config.rate));
+            if (format) {
+                return values.map(value => EASUN.formatNumber(value, config));
+            } else {
+                return values;
+            }
+        }
+    }
+
+    async getStatsWeek_PVEnergy(format?: false): Promise<Array<number> | void>;
+    async getStatsWeek_PVEnergy(format?: true): Promise<Array<string> | void>;
+    async getStatsWeek_PVEnergy(format = false): Promise<Array<number> | Array<string> | void> {
+        const config = EASUN.StatsConfig.Week.PVEnergy;
+        return this._getStatsWeekValue(format, config);
+    }
+
+    async getStatsWeek_BatteryChargeEnergy(format?: false): Promise<Array<number> | void>;
+    async getStatsWeek_BatteryChargeEnergy(format?: true): Promise<Array<string> | void>;
+    async getStatsWeek_BatteryChargeEnergy(format = false): Promise<Array<number> | Array<string> | void> {
+        const config = EASUN.StatsConfig.Week.BatteryChargeEnergy;
+        return this._getStatsWeekValue(format, config);
+    }
+
+    async getStatsWeek_BatteryDischargeEnergy(format?: false): Promise<Array<number> | void>;
+    async getStatsWeek_BatteryDischargeEnergy(format?: true): Promise<Array<string> | void>;
+    async getStatsWeek_BatteryDischargeEnergy(format = false): Promise<Array<number> | Array<string> | void> {
+        const config = EASUN.StatsConfig.Week.BatteryDischargeEnergy;
+        return this._getStatsWeekValue(format, config);
+    }
+
+    async getStatsWeek_LineChargeEnergy(format?: false): Promise<Array<number> | void>;
+    async getStatsWeek_LineChargeEnergy(format?: true): Promise<Array<string> | void>;
+    async getStatsWeek_LineChargeEnergy(format = false): Promise<Array<number> | Array<string> | void> {
+        const config = EASUN.StatsConfig.Week.LineChargeEnergy;
+        return this._getStatsWeekValue(format, config);
+    }
+
+    async getStatsWeek_LoadConsumEnergy(format?: false): Promise<Array<number> | void>;
+    async getStatsWeek_LoadConsumEnergy(format?: true): Promise<Array<string> | void>;
+    async getStatsWeek_LoadConsumEnergy(format = false): Promise<Array<number> | Array<string> | void> {
+        const config = EASUN.StatsConfig.Week.LoadConsumEnergy;
+        return this._getStatsWeekValue(format, config);
+    }
+
+    async getStatsWeek_LoadConsumEnergyFromLine(format?: false): Promise<Array<number> | void>;
+    async getStatsWeek_LoadConsumEnergyFromLine(format?: true): Promise<Array<string> | void>;
+    async getStatsWeek_LoadConsumEnergyFromLine(format = false): Promise<Array<number> | Array<string> | void> {
+        const config = EASUN.StatsConfig.Week.LoadConsumEnergyFromLine;
+        return this._getStatsWeekValue(format, config);
+    }
+
+    getStatsDay_PVEnergy(format?: false): Promise<number | void>;
+    getStatsDay_PVEnergy(format?: true): Promise<string | void>;
+    getStatsDay_PVEnergy(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Day.PVEnergy);
+    }
+
+    getStatsDay_BatteryChargeEnergy(format?: false): Promise<number | void>;
+    getStatsDay_BatteryChargeEnergy(format?: true): Promise<string | void>;
+    getStatsDay_BatteryChargeEnergy(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Day.BatteryChargeEnergy);
+    }
+
+    getStatsDay_BatteryDischargeEnergy(format?: false): Promise<number | void>;
+    getStatsDay_BatteryDischargeEnergy(format?: true): Promise<string | void>;
+    getStatsDay_BatteryDischargeEnergy(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Day.BatteryDischargeEnergy);
+    }
+
+    getStatsDay_LineChargeEnergy(format?: false): Promise<number | void>;
+    getStatsDay_LineChargeEnergy(format?: true): Promise<string | void>;
+    getStatsDay_LineChargeEnergy(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Day.LineChargeEnergy);
+    }
+
+    getStatsDay_LoadConsumEnergy(format?: false): Promise<number | void>;
+    getStatsDay_LoadConsumEnergy(format?: true): Promise<string | void>;
+    getStatsDay_LoadConsumEnergy(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Day.LoadConsumEnergy);
+    }
+
+    getStatsDay_LoadConsumEnergyFromLine(format?: false): Promise<number | void>;
+    getStatsDay_LoadConsumEnergyFromLine(format?: true): Promise<string | void>;
+    getStatsDay_LoadConsumEnergyFromLine(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.StatsConfig.Day.LoadConsumEnergyFromLine);
+    }
+
 }
 
 export namespace EASUN {
