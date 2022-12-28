@@ -1,8 +1,8 @@
 {
-  "name": "easun",
+  "name": "easun-modbus",
   "version": "1.0.0",
   "description": "",
-  "main": "test.js",
+  "main": "index.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,7 +12,6 @@
     "modbus-serial": "^8.0.8"
   },
   "devDependencies": {
-    "@types/node": "^18.11.18",
-    "ts-node": "^10.9.1"
+    "@types/node": "^18.11.18"
   }
 }

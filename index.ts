@@ -2,7 +2,7 @@ import util from "util";
 import ModbusRTU from "modbus-serial";
 import { ReadRegisterResult, WriteRegisterResult, SerialPortOptions } from "modbus-serial/ModbusRTU";
 
-export { SerialPortOptions } from "modbus-serial/ModbusRTU";
+// export { SerialPortOptions } from "modbus-serial/ModbusRTU";
 
 interface AddressConfig {
     name: string,
@@ -14,6 +14,12 @@ interface AddressConfig {
     unit: string,
     signed?: "S",
     sel?: { item: Array<{ no: number, ename: string | number }> }
+}
+
+function assert(condition: boolean, errMsg: string): void | never {
+    if (!condition) {
+        throw new Error(errMsg);
+    }
 }
 
 export class EASUN {
@@ -82,7 +88,7 @@ export class EASUN {
 
             let value = 0;
             for (let i = 0; i < data.length; i++) {
-                value += data[i] << (i * 8);
+                value += data[data.length - 1 - i] << (i * 16);
             }
 
             return value / (1 / config.rate);
@@ -120,7 +126,9 @@ export class EASUN {
             stringNum = String(num);
         }
 
-        stringNum = stringNum + " " + config.unit;
+        if (config.unit.length > 0) {
+            stringNum = stringNum + " " + config.unit;
+        }
 
         if (config.sel) {
             const item = config.sel.item.find(item => item.no === num);
@@ -130,6 +138,14 @@ export class EASUN {
         }
 
         return stringNum;
+    }
+
+    static formatDateValue(values: Array<number>): Date | void {
+        if (Array.isArray(values) && (values.length === 6)) {
+            let [year, month, day, hour, minute, second] = values;
+
+            return new Date(1970 + year, month, day, hour, minute, second);
+        }
     }
 
     async writeNumber(config: AddressConfig, value: number): Promise<WriteRegisterResult | void> {
@@ -1182,8 +1198,10 @@ export class EASUN {
         return this._readString(EASUN.ValueConfig.ProductSN);
     }
 
-    getPowerRate(): Promise<number | void> {
-        return this._readNumber(EASUN.ValueConfig.PowerRate);
+    getPowerRate(format?: false): Promise<number | void>;
+    getPowerRate(format?: true): Promise<string | void>;
+    getPowerRate(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.PowerRate);
     }
 
     getPVStatus(): Promise<number | void> {
@@ -1824,17 +1842,67 @@ export class EASUN {
         }
     }
 
-    getSystemDateTime(format?: false): Promise<number | void>;
-    getSystemDateTime(format?: true): Promise<string | void>;
-    getSystemDateTime(format = false): Promise<number | string | void> {
-        return this._getNumberValue(format, EASUN.ValueConfig.SystemDateTime);
+    getSystemDateTime(format?: false): Promise<Array<number> | void>;
+    getSystemDateTime(format?: true): Promise<Date | void>;
+    async getSystemDateTime(format = false): Promise<Array<number> | Date | void> {
+        const result = await this._readAddress(EASUN.ValueConfig.SystemDateTime);
+        if (result) {
+            // console.log(result.data[2], ...result.data.map(v => v.toString(2).padStart(16, '0')));
+            const { buffer } = result;
+            const values: Array<number> = [];
+
+            for (let i = 0; i < 6; i++) {
+                values[i] = buffer.readUint8(i);
+            }
+
+            if (format) {
+                return EASUN.formatDateValue(values);
+            } else {
+                return values;
+            }
+        }
     }
 
-    async setSystemDateTime(value: number): Promise<number | void> {
-        const result = await this.writeNumber(EASUN.ValueConfig.SystemDateTime, value);
-        if (result) {
-            return result.value;
+    /**
+     * @returns How many bytes (registers?) were written. Should be 6 (3?)
+     */
+    async setSystemDateTime(value: Array<number>): Promise<number | void>;
+    async setSystemDateTime(value: Date): Promise<number | void>;
+    async setSystemDateTime(value: Array<number> | Date): Promise<number | void> {
+        let arrValues: Array<number>;
+
+        if (Array.isArray(value)) {
+            assert(value.length === 6, "Value must be an array of 6 numbers");
+            assert(value[1] > 0 && value[1] <= 12, "Month must be between 1 and 12");
+            assert(value[2] > 0 && value[2] <= 31, "Day must be between 1 and 31");
+            assert(value[3] >= 0 && value[3] < 24, "Hour must be between 0 and 23");
+            assert(value[4] >= 0 && value[4] < 60, "Minute must be between 0 and 59");
+            assert(value[5] >= 0 && value[5] < 60, "Second must be between 0 and 59");
+            // value = EASUN.formatDateValue(value) as Date;
+            arrValues = value;
+        } else if (value instanceof Date) {
+            arrValues = [
+                value.getUTCFullYear() - 1970,
+                value.getUTCMonth(),
+                value.getUTCDay(),
+                value.getUTCHours(),
+                value.getUTCMinutes(),
+                value.getUTCSeconds(),
+            ]
         }
+        else {
+            throw new Error("Unknown value for SystemDateTime");
+        }
+
+        const registers = new Uint16Array(3);
+
+        registers[0] = (arrValues[0] << 8) + arrValues[1];
+        registers[0] = (arrValues[2] << 8) + arrValues[3];
+        registers[0] = (arrValues[4] << 8) + arrValues[5];
+
+        const result = await this.client.writeRegisters(EASUN.ValueConfig.SystemDateTime.address, [...registers]);
+
+        return result.length;
     }
 
     getInputPassword(): Promise<number | void> {

@@ -15,6 +15,7 @@
     },
     "compilerOptions": {
         // typescript options here
-        "resolveJsonModule": true
+        "resolveJsonModule": true,
+        "target": "ES2022"
     }
 }
