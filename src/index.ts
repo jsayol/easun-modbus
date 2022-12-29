@@ -24,7 +24,7 @@ function assert(condition: boolean, errMsg: string): void | never {
 
 export class EASUN {
     private static MODBUSID = 1;
-    private static MINWAIT = 100; // ms
+    private static MINWAIT = 50; // ms
     private static DEFAULT_TIMEOUT = 5000; // ms
     private static DEFAULT_OPTIONS: SerialPortOptions = {
         baudRate: 9600,
@@ -85,10 +85,10 @@ export class EASUN {
 
         if (result) {
             const { data, buffer } = result;
-
             let value = 0;
+
             for (let i = 0; i < data.length; i++) {
-                value += data[data.length - 1 - i] << (i * 16);
+                value += data[i] << (i * 16);
             }
 
             return value / (1 / config.rate);
@@ -100,16 +100,6 @@ export class EASUN {
 
         if (result) {
             return String.fromCharCode(...result.data);
-        }
-    }
-
-    private async _readNumberFormatted(config: AddressConfig): Promise<string> {
-        const num = await this._readNumber(config);
-
-        if (typeof num !== "undefined") {
-            return EASUN.formatNumber(num, config);
-        } else {
-            return "";
         }
     }
 
@@ -159,7 +149,11 @@ export class EASUN {
         this.lastOp = Date.now();
 
         try {
-            return this.client.writeRegister(config.address, Math.round(value / config.rate));
+            const result = await this.client.writeRegister(config.address, Math.round(value / config.rate));
+            if (result) {
+                result.value = result.value * config.rate;
+                return result;
+            }
         } catch (err) {
             console.error(err);
         }
@@ -167,840 +161,1092 @@ export class EASUN {
 
     static ValueConfig: { [name: string]: AddressConfig } = {
         MainPageLog: {
-            "address": 57129,
-            "len": 16,
-            "rate": 1,
-            "format": "%a",
-            "unit": "",
-            "name": "Main page log"
+            address: 57129,
+            len: 16,
+            rate: 1,
+            format: "%a",
+            unit: "",
+            name: "Main page log"
         },
         SoftwareVersion1: {
-            "address": 20,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "V",
-            "name": "Software version 1"
+            address: 20,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "V",
+            name: "Software version 1"
         },
         SoftwareVersion2: {
-            "address": 21,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "V",
-            "name": "Software version 2"
+            address: 21,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "V",
+            name: "Software version 2"
         },
         CompileTime: {
-            "address": 33,
-            "len": 20,
-            "rate": 1,
-            "format": "%s",
-            "unit": "",
-            "name": "Compile time"
+            address: 33,
+            len: 20,
+            rate: 1,
+            format: "%s",
+            unit: "",
+            name: "Compile time"
         },
         ProductSN: {
-            "address": 53,
-            "len": 20,
-            "rate": 1,
-            "format": "%s",
-            "unit": "",
-            "name": "Product SN"
+            address: 53,
+            len: 20,
+            rate: 1,
+            format: "%s",
+            unit: "",
+            name: "Product SN"
         },
         PowerRate: {
-            "address": 57624,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "kW",
-            "name": "Power rate"
+            address: 57624,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "kW",
+            name: "Power rate"
         },
         PVStatus: {
-            "address": 265,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "PV status"
+            address: 265,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "PV status"
         },
         LineStatus: {
-            "address": 528,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Line status"
+            address: 528,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Line status"
         },
         BatteryStatus: {
-            "address": 258,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Battery status"
+            address: 258,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Battery status"
         },
         LoadStatus: {
-            "address": 539,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Load status"
+            address: 539,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Load status"
         },
         CurrentFault: {
-            "address": 516,
-            "len": 4,
-            "maxLen": 31,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Current fault"
+            address: 516,
+            len: 4,
+            maxLen: 31,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Current fault"
         },
         PVVoltage1: {
-            "address": 263,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "PV voltage1"
+            address: 263,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "PV voltage1"
         },
         PVCurrent: {
-            "address": 264,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "A",
-            "name": "PV current"
+            address: 264,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "A",
+            name: "PV current"
         },
         PVPower: {
-            "address": 265,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "W",
-            "name": "PV power"
+            address: 265,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "W",
+            name: "PV power"
         },
         LineVoltage: {
-            "address": 531,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Line voltage"
+            address: 531,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Line voltage"
         },
         LineCurrent: {
-            "address": 532,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "A",
-            "name": "Line current"
+            address: 532,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "A",
+            name: "Line current"
         },
         LineFrequency: {
-            "address": 533,
-            "len": 1,
-            "rate": 0.01,
-            "format": "%.2f",
-            "unit": "Hz",
-            "name": "Line frequency"
+            address: 533,
+            len: 1,
+            rate: 0.01,
+            format: "%.2f",
+            unit: "Hz",
+            name: "Line frequency"
         },
         BatteryType: {
-            "address": 57348,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "sel": {
-                "item": [
+            address: 57348,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            sel: {
+                item: [
                     {
-                        "no": 0,
-                        "ename": "User def"
+                        no: 0,
+                        ename: "User def"
                     },
                     {
-                        "no": 1,
-                        "ename": "SLD"
+                        no: 1,
+                        ename: "SLD"
                     },
                     {
-                        "no": 2,
-                        "ename": "FLD"
+                        no: 2,
+                        ename: "FLD"
                     },
                     {
-                        "no": 3,
-                        "ename": "GEL"
+                        no: 3,
+                        ename: "GEL"
                     },
                     {
-                        "no": 4,
-                        "ename": "LF14"
+                        no: 4,
+                        ename: "LF14"
                     },
                     {
-                        "no": 5,
-                        "ename": "LF15"
+                        no: 5,
+                        ename: "LF15"
                     },
                     {
-                        "no": 6,
-                        "ename": "LF16"
+                        no: 6,
+                        ename: "LF16"
                     },
                     {
-                        "no": 7,
-                        "ename": "LF7"
+                        no: 7,
+                        ename: "LF7"
                     },
                     {
-                        "no": 8,
-                        "ename": "LF8"
+                        no: 8,
+                        ename: "LF8"
                     },
                     {
-                        "no": 9,
-                        "ename": "LF9"
+                        no: 9,
+                        ename: "LF9"
                     },
                     {
-                        "no": 10,
-                        "ename": "NCA7"
+                        no: 10,
+                        ename: "NCA7"
                     },
                     {
-                        "no": 11,
-                        "ename": "NCA8"
+                        no: 11,
+                        ename: "NCA8"
                     },
                     {
-                        "no": 12,
-                        "ename": "NCA13"
+                        no: 12,
+                        ename: "NCA13"
                     },
                     {
-                        "no": 13,
-                        "ename": "NCA14"
+                        no: 13,
+                        ename: "NCA14"
                     }
                 ]
             },
-            "name": "Battery type"
+            name: "Battery type"
         },
         BatteryVoltage: {
-            "address": 257,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Battery voltage"
+            address: 257,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Battery voltage"
         },
         BatteryCurrent: {
-            "address": 258,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "A",
-            "signed": "S",
-            "name": "Battery current"
+            address: 258,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "A",
+            signed: "S",
+            name: "Battery current"
         },
         BatterySOC: {
-            "address": 256,
-            "len": 1,
-            "maxLen": 15,
-            "rate": 1,
-            "format": "%d",
-            "unit": "%",
-            "name": "Battery SOC(%)"
+            address: 256,
+            len: 1,
+            maxLen: 15,
+            rate: 1,
+            format: "%d",
+            unit: "%",
+            name: "Battery SOC(%)"
         },
         ChgCurrentByLine: {
-            "address": 542,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "A",
-            "signed": "S",
-            "name": "Chg current by line"
+            address: 542,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "A",
+            signed: "S",
+            name: "Chg current by line"
         },
         LoadVoltage: {
-            "address": 534,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Load voltage"
+            address: 534,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Load voltage"
         },
         LoadCurrent: {
-            "address": 537,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "A",
-            "name": "Load current"
+            address: 537,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "A",
+            name: "Load current"
         },
         LoadActivePower: {
-            "address": 539,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "W",
-            "name": "Load active power"
+            address: 539,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "W",
+            name: "Load active power"
         },
         LoadApparentPower: {
-            "address": 540,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "VA",
-            "name": "Load apparent power"
+            address: 540,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "VA",
+            name: "Load apparent power"
         },
         LoadRatio: {
-            "address": 543,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "%",
-            "name": "Load ratio"
+            address: 543,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "%",
+            name: "Load ratio"
         },
         TemperatureDC: {
-            "address": 544,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "℃",
-            "signed": "S",
-            "name": "Temperature DC"
+            address: 544,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "℃",
+            signed: "S",
+            name: "Temperature DC"
         },
         TemperatureAC: {
-            "address": 545,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "℃",
-            "signed": "S",
-            "name": "Temperature AC"
+            address: 545,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "℃",
+            signed: "S",
+            name: "Temperature AC"
         },
         TemperatureTR: {
-            "address": 546,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "℃",
-            "signed": "S",
-            "name": "Temperature TR"
+            address: 546,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "℃",
+            signed: "S",
+            name: "Temperature TR"
         },
         InverterCurrent: {
-            "address": 535,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "A",
-            "name": "Inverter current"
+            address: 535,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "A",
+            name: "Inverter current"
         },
         InverterFrequency: {
-            "address": 536,
-            "len": 1,
-            "rate": 0.01,
-            "format": "%.2f",
-            "unit": "Hz",
-            "name": "Inverter frequency"
+            address: 536,
+            len: 1,
+            rate: 0.01,
+            format: "%.2f",
+            unit: "Hz",
+            name: "Inverter frequency"
         },
         MachineState: {
-            "address": 528,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "sel": {
-                "item": [
+            address: 528,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            sel: {
+                item: [
                     {
-                        "no": 0,
-                        "ename": "Power on"
+                        no: 0,
+                        ename: "Power on"
                     },
                     {
-                        "no": 1,
-                        "ename": "Stand by"
+                        no: 1,
+                        ename: "Stand by"
                     },
                     {
-                        "no": 2,
-                        "ename": "Initialization"
+                        no: 2,
+                        ename: "Initialization"
                     },
                     {
-                        "no": 3,
-                        "ename": "Soft start"
+                        no: 3,
+                        ename: "Soft start"
                     },
                     {
-                        "no": 4,
-                        "ename": "Running in line"
+                        no: 4,
+                        ename: "Running in line"
                     },
                     {
-                        "no": 5,
-                        "ename": "Running in inverter"
+                        no: 5,
+                        ename: "Running in inverter"
                     },
                     {
-                        "no": 6,
-                        "ename": "Invert to line"
+                        no: 6,
+                        ename: "Invert to line"
                     },
                     {
-                        "no": 7,
-                        "ename": "Line to invert"
+                        no: 7,
+                        ename: "Line to invert"
                     },
                     {
-                        "no": 8,
-                        "ename": "remain"
+                        no: 8,
+                        ename: "remain"
                     },
                     {
-                        "no": 9,
-                        "ename": "remain"
+                        no: 9,
+                        ename: "remain"
                     },
                     {
-                        "no": 10,
-                        "ename": "Shutdown"
+                        no: 10,
+                        ename: "Shutdown"
                     },
                     {
-                        "no": 11,
-                        "ename": "Fault"
+                        no: 11,
+                        ename: "Fault"
                     }
                 ]
             },
-            "name": "Machine state"
+            name: "Machine state"
         },
         BatteryChargeStep: {
-            "address": 267,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "sel": {
-                "item": [
+            address: 267,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            sel: {
+                item: [
                     {
-                        "no": 0,
-                        "ename": "Not start"
+                        no: 0,
+                        ename: "Not start"
                     },
                     {
-                        "no": 1,
-                        "ename": "Const current"
+                        no: 1,
+                        ename: "Const current"
                     },
                     {
-                        "no": 2,
-                        "ename": "Const voltage"
+                        no: 2,
+                        ename: "Const voltage"
                     },
                     {
-                        "no": 3,
-                        "ename": "reserved"
+                        no: 3,
+                        ename: "reserved"
                     },
                     {
-                        "no": 4,
-                        "ename": "Float charge"
+                        no: 4,
+                        ename: "Float charge"
                     },
                     {
-                        "no": 5,
-                        "ename": "reserved"
+                        no: 5,
+                        ename: "reserved"
                     },
                     {
-                        "no": 6,
-                        "ename": "Active charge"
+                        no: 6,
+                        ename: "Active charge"
                     },
                     {
-                        "no": 7,
-                        "ename": "Active charge"
+                        no: 7,
+                        ename: "Active charge"
                     }
                 ]
             },
-            "name": "Battery charge step"
+            name: "Battery charge step"
         },
         OutputPriority: {
-            "address": 57860,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "sel": {
-                "item": [
+            address: 57860,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            sel: {
+                item: [
                     {
-                        "no": 0,
-                        "ename": "solar first"
+                        no: 0,
+                        ename: "PV first"
                     },
                     {
-                        "no": 1,
-                        "ename": "line first"
+                        no: 1,
+                        ename: "Mains first"
                     },
                     {
-                        "no": 2,
-                        "ename": "sbu first"
+                        no: 2,
+                        ename: "Battery first"
                     }
                 ]
             },
-            "name": "Output priority"
+            name: "Output priority"
         },
         PVGenerateEnergyTotal: {
-            "address": 61496,
-            "len": 2,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "kWh",
-            "name": "PV generate energy total"
+            address: 61496,
+            len: 2,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "kWh",
+            name: "PV generate energy total"
         },
         LoadConsumEnergyTotal: {
-            "address": 61498,
-            "len": 2,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "kWh",
-            "name": "Load consum energy total"
+            address: 61498,
+            len: 2,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "kWh",
+            name: "Load consum energy total"
         },
         PVGenerateEnergyToday: {
-            "address": 61487,
-            "len": 1,
-            "maxLen": 13,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "kWh",
-            "name": "PV generate energy today"
+            address: 61487,
+            len: 1,
+            maxLen: 13,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "kWh",
+            name: "PV generate energy today"
         },
         LoadConsumEnergyToday: {
-            "address": 61488,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "kWh",
-            "name": "Load consum energy today"
+            address: 61488,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "kWh",
+            name: "Load consum energy today"
         },
         OutputFrequency: {
-            "address": 57865,
-            "len": 1,
-            "rate": 0.01,
-            "format": "%.2f",
-            "unit": "Hz",
-            "name": "Output Frequency"
+            address: 57865,
+            len: 1,
+            rate: 0.01,
+            format: "%.2f",
+            unit: "Hz",
+            name: "Output Frequency",
+            sel: {
+                item: [
+                    {
+                        no: 50,
+                        ename: "50 Hz"
+                    },
+                    {
+                        no: 60,
+                        ename: "60 Hz"
+                    }
+                ]
+            }
         },
         AcInputVoltageRange: {
-            "address": 57867,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Ac Input Voltage Range"
+            address: 57867,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Ac Input Voltage Range",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "APL"
+                    },
+                    {
+                        no: 1,
+                        ename: "UPS"
+                    }
+                ]
+            }
         },
         TurnToMainsVolt: {
-            "address": 57371,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Turn to mains volt"
+            address: 57371,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Turn to mains volt"
         },
         TurnToInverterVolt: {
-            "address": 57378,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Turn to inverter volt"
+            address: 57378,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Turn to inverter volt"
         },
         ChargerSourcePriority: {
-            "address": 57871,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Charger source priority"
+            address: 57871,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Charger source priority",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "PV first"
+                    },
+                    {
+                        no: 1,
+                        ename: "Mains first"
+                    },
+                    {
+                        no: 2,
+                        ename: "PV and Mains"
+                    },
+                    {
+                        no: 3,
+                        ename: "Only PV"
+                    }
+                ]
+            }
         },
         MaxChargerCurrent: {
-            "address": 57866,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "A",
-            "name": "Max charger current"
+            address: 57866,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "A",
+            name: "Max charger current"
         },
         BatteryBoostChargeVoltage: {
-            "address": 57352,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Battery boost charge voltage"
+            address: 57352,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Battery boost charge voltage"
         },
         BatteryBoostChargeTime: {
-            "address": 57362,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "Min",
-            "name": "Battery boost charge time"
+            address: 57362,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "Min",
+            name: "Battery boost charge time"
         },
         BatteryFloatingChargeVoltage: {
-            "address": 57353,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Battery floating charge voltage"
+            address: 57353,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Battery floating charge voltage"
         },
         BatteryOverDischargeVoltage: {
-            "address": 57357,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Battery over discharge voltage"
+            address: 57357,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Battery over discharge voltage"
         },
         BatteryOverDischargeDelayTime: {
-            "address": 57360,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "S",
-            "name": "Battery over discharge delay time"
+            address: 57360,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "S",
+            name: "Battery over discharge delay time"
         },
         BatteryUnderVoltageAlarm: {
-            "address": 57356,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Battery under voltage alarm"
+            address: 57356,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Battery under voltage alarm"
         },
         BatteryDischargeLimitVoltage: {
-            "address": 57358,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Battery discharge limit voltage"
+            address: 57358,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Battery discharge limit voltage"
         },
         BatteryEqualizationEnable: {
-            "address": 57862,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "V",
-            "name": "Battery equalization enable"
+            address: 57862,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "V",
+            name: "Battery equalization enable",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Disable"
+                    },
+                    {
+                        no: 1,
+                        ename: "Enable"
+                    }
+                ]
+            }
         },
         BatteryEqualizationVoltage: {
-            "address": 57351,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Battery equalization voltage"
+            address: 57351,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Battery equalization voltage"
         },
         BatteryEqualizedTime: {
-            "address": 57361,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "Min",
-            "name": "Battery equalized time"
+            address: 57361,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "Min",
+            name: "Battery equalized time"
         },
         BatteryEqualizedTimeOut: {
-            "address": 57379,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "Min",
-            "name": "Battery equalized time out"
+            address: 57379,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "Min",
+            name: "Battery equalized time out"
         },
         BatteryEqualizationInterval: {
-            "address": 57363,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "Day",
-            "name": "Battery equalization interval"
+            address: 57363,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "Day",
+            name: "Battery equalization interval"
         },
         BatteryEqualizationImmediately: {
-            "address": 57101,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Battery equalization immediately"
+            address: 57101,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Battery equalization immediately",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Disable"
+                    },
+                    {
+                        no: 1,
+                        ename: "Enable"
+                    }
+                ]
+            }
         },
         PowerSavingMode: {
-            "address": 57868,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Power saving mode"
+            address: 57868,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Power saving mode",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Disable"
+                    },
+                    {
+                        no: 1,
+                        ename: "Enable"
+                    }
+                ]
+            }
         },
         RestartWhenOverLoad: {
-            "address": 57869,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Restart when over load"
+            address: 57869,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Restart when over load",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Disable"
+                    },
+                    {
+                        no: 1,
+                        ename: "Enable"
+                    }
+                ]
+            }
         },
         RestartWhenOverTemperature: {
-            "address": 57870,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Restart when over temperature"
+            address: 57870,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Restart when over temperature",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Disable"
+                    },
+                    {
+                        no: 1,
+                        ename: "Enable"
+                    }
+                ]
+            }
         },
         AlarmEnable: {
-            "address": 57872,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Alarm enable"
+            address: 57872,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Alarm enable",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Disable"
+                    },
+                    {
+                        no: 1,
+                        ename: "Enable"
+                    }
+                ]
+            }
         },
         InputChangeAlarm: {
-            "address": 57873,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Input change alarm"
+            address: 57873,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Input change alarm",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Disable"
+                    },
+                    {
+                        no: 1,
+                        ename: "Enable"
+                    }
+                ]
+            }
         },
         BypassOutputWhenOverLoad: {
-            "address": 57874,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Bypass output when over load"
+            address: 57874,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Bypass output when over load",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Disable"
+                    },
+                    {
+                        no: 1,
+                        ename: "Enable"
+                    }
+                ]
+            }
         },
         MaxACChargerCurrent: {
-            "address": 57861,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "A",
-            "name": "Max AC charger current"
+            address: 57861,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "A",
+            name: "Max AC charger current"
         },
         SplitPhase: {
-            "address": 57876,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Split Phase"
+            address: 57876,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Split Phase",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Disable"
+                    },
+                    {
+                        no: 1,
+                        ename: "Enable"
+                    }
+                ]
+            }
         },
         RS485Address: {
-            "address": 57856,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "RS485 Address"
+            address: 57856,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "RS485 Address"
         },
         ParallelMode: {
-            "address": 57857,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Parallel Mode"
+            address: 57857,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Parallel Mode",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Stand-alone"
+                    },
+                    {
+                        no: 1,
+                        ename: "Parallel-single phase"
+                    },
+                    {
+                        no: 2,
+                        ename: "Parallel-split phase 0°"
+                    },
+                    {
+                        no: 3,
+                        ename: "Parallel-split phase 120°"
+                    },
+                    {
+                        no: 4,
+                        ename: "Parallel-split phase 180°"
+                    },
+                    {
+                        no: 5,
+                        ename: "Parallel-three phase A"
+                    },
+                    {
+                        no: 6,
+                        ename: "Parallel-three phase B"
+                    },
+                    {
+                        no: 7,
+                        ename: "Parallel-three phase C"
+                    }
+                ]
+            }
         },
         BMSEnable: {
-            "address": 57877,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "BMS enable"
+            address: 57877,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "BMS enable",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Disable"
+                    },
+                    {
+                        no: 1,
+                        ename: "458 BMS"
+                    },
+                    {
+                        no: 2,
+                        ename: "CAN BMS"
+                    }
+                ]
+            }
         },
         BMSProtocol: {
-            "address": 57883,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "BMS Protocol"
+            address: 57883,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "BMS Protocol",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        ename: "Pace"
+                    },
+                    {
+                        no: 1,
+                        ename: "Rata"
+                    },
+                    {
+                        no: 2,
+                        ename: "Allgrand"
+                    },
+                    {
+                        no: 3,
+                        ename: "Oliter"
+                    },
+                    {
+                        no: 4,
+                        ename: "PCT"
+                    },
+                    {
+                        no: 5,
+                        ename: "Sunwoda"
+                    },
+                    {
+                        no: 6,
+                        ename: "Dyness"
+                    },
+                    {
+                        no: 7,
+                        ename: "WOW"
+                    },
+                    {
+                        no: 8,
+                        ename: "Pylontech"
+                    },
+                    {
+                        no: 16,
+                        ename: "WS Technicals"
+                    },
+                    {
+                        no: 17,
+                        ename: "Uz Energy"
+                    }
+                ]
+            }
         },
         Reserved: {
-            "address": 57620,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "",
-            "name": "Reserved"
+            address: 57620,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "",
+            name: "Reserved"
         },
         BatteryUndervoltageRecovery: {
-            "address": 57355,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Battery undervoltage recovery"
+            address: 57355,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Battery undervoltage recovery"
         },
         MaxPVChargerCurrent: {
-            "address": 57345,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "A",
-            "name": "Max PV charger current"
+            address: 57345,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "A",
+            name: "Max PV charger current"
         },
         BatteryChargeRecovery: {
-            "address": 57354,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Battery charge recovery"
+            address: 57354,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Battery charge recovery"
         },
         OutputVoltageSet: {
-            "address": 57864,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "V",
-            "name": "Output voltage set"
+            address: 57864,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "V",
+            name: "Output voltage set"
         },
         SystemDateTime: {
-            "address": 524,
-            "len": 3,
-            "rate": 1,
-            "format": "%zdt",
-            "unit": "",
-            "name": "System date time"
+            address: 524,
+            len: 3,
+            rate: 1,
+            format: "%zdt",
+            unit: "",
+            name: "System date time"
         },
         InputPassword: {
-            "address": 57859,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Input password"
+            address: 57859,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Input password"
         },
         ChangePassword: {
-            "address": 57858,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Change password"
+            address: 57858,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Change password"
         },
         CustomerID: {
-            "address": 57623,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Customer ID"
+            address: 57623,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Customer ID"
         },
         PVVoltageRate: {
-            "address": 57631,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "V",
-            "name": "PV voltage rate"
+            address: 57631,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "V",
+            name: "PV voltage rate"
         },
         MaxChargeCurrentByPV: {
-            "address": 57632,
-            "len": 1,
-            "rate": 0.1,
-            "format": "%.1f",
-            "unit": "A",
-            "name": "Max charge current by PV"
+            address: 57632,
+            len: 1,
+            rate: 0.1,
+            format: "%.1f",
+            unit: "A",
+            name: "Max charge current by PV"
         },
         FunctionEnable1: {
-            "address": 57629,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Function enable 1"
+            address: 57629,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Function enable 1"
         },
         FunctionEnable2: {
-            "address": 57630,
-            "len": 1,
-            "rate": 1,
-            "format": "%d",
-            "unit": "",
-            "name": "Function enable 2"
+            address: 57630,
+            len: 1,
+            rate: 1,
+            format: "%d",
+            unit: "",
+            name: "Function enable 2"
         },
 
     };
@@ -1008,155 +1254,155 @@ export class EASUN {
     static StatsConfig: { [group: string]: { [name: string]: AddressConfig } } = {
         Total: {
             BatteryChargeTotal: {
-                "address": 61492,
-                "len": 2,
-                "rate": 1,
-                "maxLen": 8,
-                "format": "%d",
-                "unit": "Ah",
-                "name": "Battery charge total"
+                address: 61492,
+                len: 2,
+                rate: 1,
+                maxLen: 8,
+                format: "%d",
+                unit: "Ah",
+                name: "Battery charge total"
             },
             PVGenerateEnergyTotal: {
-                "address": 61496,
-                "len": 2,
-                "rate": 0.1,
-                "format": "%.1f",
-                "unit": "kWh",
-                "name": "PV generate energy total"
+                address: 61496,
+                len: 2,
+                rate: 0.1,
+                format: "%.1f",
+                unit: "kWh",
+                name: "PV generate energy total"
             },
             WorkTimeTotalInInverter: {
-                "address": 61514,
-                "len": 1,
-                "rate": 1,
-                "format": "%d",
-                "unit": "h",
-                "name": "Work time total in inverter"
+                address: 61514,
+                len: 1,
+                rate: 1,
+                format: "%d",
+                unit: "h",
+                name: "Work time total in inverter"
             },
             BatteryDischargeTotal: {
-                "address": 61494,
-                "len": 2,
-                "rate": 1,
-                "format": "%d",
-                "unit": "Ah",
-                "name": "Battery discharge total"
+                address: 61494,
+                len: 2,
+                rate: 1,
+                format: "%d",
+                unit: "Ah",
+                name: "Battery discharge total"
             },
             LoadConsumEnergyTotal: {
-                "address": 61498,
-                "len": 2,
-                "rate": 0.1,
-                "format": "%.1f",
-                "unit": "kWh",
-                "name": "Load consum energy total"
+                address: 61498,
+                len: 2,
+                rate: 0.1,
+                format: "%.1f",
+                unit: "kWh",
+                name: "Load consum energy total"
             },
             WorkTimeTotalInLine: {
-                "address": 61515,
-                "len": 1,
-                "rate": 1,
-                "format": "%d",
-                "unit": "h",
-                "name": "Work time total in line"
+                address: 61515,
+                len: 1,
+                rate: 1,
+                format: "%d",
+                unit: "h",
+                name: "Work time total in line"
             },
 
         },
         Week: {
             PVEnergy: {
-                "address": 61440,
-                "len": 7,
-                "rate": 0.1,
-                "format": "%.1f",
-                "unit": "kWh",
-                "name": "PV energy"
+                address: 61440,
+                len: 7,
+                rate: 0.1,
+                format: "%.1f",
+                unit: "kWh",
+                name: "PV energy"
             },
             BatteryChargeEnergy: {
-                "address": 61447,
-                "len": 7,
-                "rate": 1,
-                "format": "%d",
-                "unit": "Ah",
-                "name": "Battery charge energy"
+                address: 61447,
+                len: 7,
+                rate: 1,
+                format: "%d",
+                unit: "Ah",
+                name: "Battery charge energy"
             },
             BatteryDischargeEnergy: {
-                "address": 61454,
-                "len": 7,
-                "rate": 1,
-                "format": "%d",
-                "unit": "Ah",
-                "name": "Battery discharge energy"
+                address: 61454,
+                len: 7,
+                rate: 1,
+                format: "%d",
+                unit: "Ah",
+                name: "Battery discharge energy"
             },
             LineChargeEnergy: {
-                "address": 61461,
-                "len": 7,
-                "rate": 1,
-                "format": "%d",
-                "unit": "Ah",
-                "name": "Line charge energy"
+                address: 61461,
+                len: 7,
+                rate: 1,
+                format: "%d",
+                unit: "Ah",
+                name: "Line charge energy"
             },
             LoadConsumEnergy: {
-                "address": 61468,
-                "len": 7,
-                "rate": 0.1,
-                "format": "%.1f",
-                "unit": "kWh",
-                "name": "Load consum energy"
+                address: 61468,
+                len: 7,
+                rate: 0.1,
+                format: "%.1f",
+                unit: "kWh",
+                name: "Load consum energy"
             },
             LoadConsumEnergyFromLine: {
-                "address": 61475,
-                "len": 7,
-                "rate": 0.1,
-                "format": "%.1f",
-                "unit": "kWh",
-                "name": "Load consum energy from line"
+                address: 61475,
+                len: 7,
+                rate: 0.1,
+                format: "%.1f",
+                unit: "kWh",
+                name: "Load consum energy from line"
             },
 
         },
         Day: {
             PVEnergy: {
-                "address": 61487,
-                "len": 1,
-                "rate": 0.1,
-                "format": "%.1f",
-                "unit": "kWh",
-                "name": "PV energy"
+                address: 61487,
+                len: 1,
+                rate: 0.1,
+                format: "%.1f",
+                unit: "kWh",
+                name: "PV energy"
             },
             BatteryChargeEnergy: {
-                "address": 61485,
-                "len": 1,
-                "rate": 1,
-                "format": "%d",
-                "unit": "Ah",
-                "name": "Battery charge energy"
+                address: 61485,
+                len: 1,
+                rate: 1,
+                format: "%d",
+                unit: "Ah",
+                name: "Battery charge energy"
             },
             BatteryDischargeEnergy: {
-                "address": 61486,
-                "len": 1,
-                "rate": 1,
-                "format": "%d",
-                "unit": "Ah",
-                "name": "Battery discharge energy"
+                address: 61486,
+                len: 1,
+                rate: 1,
+                format: "%d",
+                unit: "Ah",
+                name: "Battery discharge energy"
             },
             LineChargeEnergy: {
-                "address": 61500,
-                "len": 1,
-                "rate": 1,
-                "format": "%d",
-                "unit": "Ah",
-                "name": "Line charge energy"
+                address: 61500,
+                len: 1,
+                rate: 1,
+                format: "%d",
+                unit: "Ah",
+                name: "Line charge energy"
             },
             LoadConsumEnergy: {
-                "address": 61488,
-                "len": 1,
-                "rate": 0.1,
-                "format": "%.1f",
-                "unit": "kWh",
-                "name": "Load consum energy"
+                address: 61488,
+                len: 1,
+                rate: 0.1,
+                format: "%.1f",
+                unit: "kWh",
+                name: "Load consum energy"
             },
             LoadConsumEnergyFromLine: {
-                "address": 61501,
-                "len": 1,
-                "rate": 0.1,
-                "format": "%.1f",
-                "unit": "kWh",
-                "name": "Load consum energy from line"
+                address: 61501,
+                len: 1,
+                rate: 0.1,
+                format: "%.1f",
+                unit: "kWh",
+                name: "Load consum energy from line"
             },
 
         },
@@ -1202,6 +1448,12 @@ export class EASUN {
     getPowerRate(format?: true): Promise<string | void>;
     getPowerRate(format = false): Promise<number | string | void> {
         return this._getNumberValue(format, EASUN.ValueConfig.PowerRate);
+    }
+
+    getPVVoltageRate(format?: false): Promise<number | void>;
+    getPVVoltageRate(format?: true): Promise<string | void>;
+    getPVVoltageRate(format = false): Promise<number | string | void> {
+        return this._getNumberValue(format, EASUN.ValueConfig.PVVoltageRate);
     }
 
     getPVStatus(): Promise<number | void> {
@@ -1938,26 +2190,6 @@ export class EASUN {
         }
     }
 
-    async setPowerRate(value: number): Promise<number | void> {
-        const result = await this.writeNumber(EASUN.ValueConfig.PowerRate, value);
-        if (result) {
-            return result.value;
-        }
-    }
-
-    getPVVoltageRate(format?: false): Promise<number | void>;
-    getPVVoltageRate(format?: true): Promise<string | void>;
-    getPVVoltageRate(format = false): Promise<number | string | void> {
-        return this._getNumberValue(format, EASUN.ValueConfig.PVVoltageRate);
-    }
-
-    async setPVVoltageRate(value: number): Promise<number | void> {
-        const result = await this.writeNumber(EASUN.ValueConfig.PVVoltageRate, value);
-        if (result) {
-            return result.value;
-        }
-    }
-
     getMaxChargeCurrentByPV(format?: false): Promise<number | void>;
     getMaxChargeCurrentByPV(format?: true): Promise<string | void>;
     getMaxChargeCurrentByPV(format = false): Promise<number | string | void> {
@@ -2265,3 +2497,5 @@ export namespace EASUN {
         UzEnergy = 17
     }
 }
+
+export default EASUN;
