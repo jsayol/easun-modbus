@@ -1,4 +1,15 @@
-Basic usage:
+## easun-modbus
+
+Node.js library to communicate with an EASUN inverter via a serial connection.
+Tested with an EASUN ISolar SMX II 3.6KW, connected via USB to a Raspberry Pi 3B.
+
+### Instalation
+
+`npm install --save easun-modbus`
+or
+`yarn add easun-modbus`
+
+#### Basic usage
 
 ```ts
 import EASUN from "easun-modbus";
@@ -38,4 +49,6 @@ async function doStuff() {
 }
 ```
 
-Full documentation with all the class methods here: https://jsayol.github.io/easun-modbus/classes/EASUN-1.html
+### Documentation
+
+Auto-generated documentation with all the class methods: https://jsayol.github.io/easun-modbus/classes/EASUN-1.html
