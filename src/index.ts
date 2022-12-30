@@ -2116,7 +2116,7 @@ export class EASUN {
     }
 
     /**
-     * @returns How many bytes (registers?) were written. Should be 6 (3?)
+     * @returns How many registers were written. Should be 3
      */
     async setSystemDateTime(value: Array<number>): Promise<number | void>;
     async setSystemDateTime(value: Date): Promise<number | void>;
