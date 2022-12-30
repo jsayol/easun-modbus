@@ -24,9 +24,10 @@ export declare class EASUN {
     private static DEFAULT_OPTIONS;
     private client;
     private lastOp;
-    private static sleep;
+    static sleep(ms: number): Promise<unknown>;
     constructor(port: string, options?: SerialPortOptions);
     connect(): Promise<void>;
+    onDisconnect(callback: () => any): void;
     get timeout(): number;
     set timeout(value: number);
     private _readAddress;
@@ -214,6 +215,7 @@ export declare class EASUN {
      */
     setSystemDateTime(value: Array<number>): Promise<number | void>;
     setSystemDateTime(value: Date): Promise<number | void>;
+    setSystemDateTime(value: number): Promise<number | void>;
     getInputPassword(): Promise<number | void>;
     setInputPassword(value: number): Promise<number | void>;
     getChangePassword(): Promise<number | void>;

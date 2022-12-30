@@ -24,7 +24,7 @@ function assert(condition: boolean, errMsg: string): void | never {
 
 export class EASUN {
     private static MODBUSID = 1;
-    private static MINWAIT = 50; // ms
+    private static MINWAIT = 100; // ms
     private static DEFAULT_TIMEOUT = 5000; // ms
     private static DEFAULT_OPTIONS: SerialPortOptions = {
         baudRate: 9600,
@@ -37,7 +37,7 @@ export class EASUN {
     private client: ModbusRTU;
     private lastOp: number = Date.now();
 
-    private static sleep(ms: number) {
+    static sleep(ms: number) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
@@ -46,13 +46,13 @@ export class EASUN {
     }
 
     async connect() {
-        try {
-            this.client.setTimeout(EASUN.DEFAULT_TIMEOUT);
-            this.client.setID(EASUN.MODBUSID);
-            await this.client.connectRTUBuffered(this.port, { ...EASUN.DEFAULT_OPTIONS, ...this.options });
-        } catch (err) {
-            console.error(err);
-        }
+        this.client.setTimeout(EASUN.DEFAULT_TIMEOUT);
+        this.client.setID(EASUN.MODBUSID);
+        await this.client.connectRTUBuffered(this.port, { ...EASUN.DEFAULT_OPTIONS, ...this.options });
+    }
+
+    onDisconnect(callback: () => any) {
+        this.client.on("close", callback);
     }
 
     get timeout(): number {
@@ -2120,26 +2120,34 @@ export class EASUN {
      */
     async setSystemDateTime(value: Array<number>): Promise<number | void>;
     async setSystemDateTime(value: Date): Promise<number | void>;
-    async setSystemDateTime(value: Array<number> | Date): Promise<number | void> {
+    async setSystemDateTime(value: number): Promise<number | void>;
+    async setSystemDateTime(value: Array<number> | Date | number): Promise<number | void> {
         let arrValues: Array<number>;
+
+        if (typeof value === "number") {
+            value = new Date(value);
+
+            if (Number.isNaN(value.valueOf())) {
+                throw new Error("Invalid date for SystemDateTime");
+            }
+        }
 
         if (Array.isArray(value)) {
             assert(value.length === 6, "Value must be an array of 6 numbers");
-            assert(value[1] > 0 && value[1] <= 12, "Month must be between 1 and 12");
+            assert(value[1] >= 0 && value[1] < 12, "Month must be between 0 and 11");
             assert(value[2] > 0 && value[2] <= 31, "Day must be between 1 and 31");
             assert(value[3] >= 0 && value[3] < 24, "Hour must be between 0 and 23");
             assert(value[4] >= 0 && value[4] < 60, "Minute must be between 0 and 59");
             assert(value[5] >= 0 && value[5] < 60, "Second must be between 0 and 59");
-            // value = EASUN.formatDateValue(value) as Date;
             arrValues = value;
         } else if (value instanceof Date) {
             arrValues = [
-                value.getUTCFullYear() - 1970,
-                value.getUTCMonth(),
-                value.getUTCDay(),
-                value.getUTCHours(),
-                value.getUTCMinutes(),
-                value.getUTCSeconds(),
+                value.getFullYear() - 1970,
+                value.getMonth(),
+                value.getDate(),
+                value.getHours(),
+                value.getMinutes(),
+                value.getSeconds(),
             ]
         }
         else {
@@ -2149,8 +2157,8 @@ export class EASUN {
         const registers = new Uint16Array(3);
 
         registers[0] = (arrValues[0] << 8) + arrValues[1];
-        registers[0] = (arrValues[2] << 8) + arrValues[3];
-        registers[0] = (arrValues[4] << 8) + arrValues[5];
+        registers[1] = (arrValues[2] << 8) + arrValues[3];
+        registers[2] = (arrValues[4] << 8) + arrValues[5];
 
         const result = await this.client.writeRegisters(EASUN.ValueConfig.SystemDateTime.address, [...registers]);
 
