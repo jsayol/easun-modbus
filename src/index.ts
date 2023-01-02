@@ -2,6 +2,10 @@ import util from "util";
 import ModbusRTU from "modbus-serial";
 import { ReadRegisterResult, WriteRegisterResult, SerialPortOptions } from "modbus-serial/ModbusRTU";
 
+import { assert } from "./utils";
+import { setupEasunWifiConnection } from "./wifi";
+import * as MockSerialPort from "./wifi/mock-serialport";
+
 // export { SerialPortOptions } from "modbus-serial/ModbusRTU";
 
 interface AddressConfig {
@@ -13,12 +17,12 @@ interface AddressConfig {
     format: string, // util.format()
     unit: string,
     signed?: "S",
-    sel?: { item: Array<{ no: number, ename: string | number }> }
-}
-
-function assert(condition: boolean, errMsg: string): void | never {
-    if (!condition) {
-        throw new Error(errMsg);
+    sel?: {
+        item: Array<{
+            no: number,
+            name: string | number,
+            desc?: string
+        }>
     }
 }
 
@@ -41,14 +45,21 @@ export class EASUN {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    constructor(private port: string, private options: SerialPortOptions = {}) {
+    constructor(private options: SerialPortOptions = {}) {
         this.client = new ModbusRTU();
-    }
-
-    async connect() {
         this.client.setTimeout(EASUN.DEFAULT_TIMEOUT);
         this.client.setID(EASUN.MODBUSID);
-        await this.client.connectRTUBuffered(this.port, { ...EASUN.DEFAULT_OPTIONS, ...this.options });
+    }
+
+    async connectSerial(port: string) {
+        MockSerialPort.disable();
+        await this.client.connectRTUBuffered(port, { ...EASUN.DEFAULT_OPTIONS, ...this.options });
+    }
+
+    async connectWifiDevice(wifiIP: string, localIP: string) {
+        MockSerialPort.enable();
+        await setupEasunWifiConnection(wifiIP, localIP);
+        await this.client.connectRTUBuffered("", { ...EASUN.DEFAULT_OPTIONS, ...this.options });
     }
 
     onDisconnect(callback: () => any) {
@@ -87,8 +98,12 @@ export class EASUN {
             const { data, buffer } = result;
             let value = 0;
 
-            for (let i = 0; i < data.length; i++) {
-                value += data[i] << (i * 16);
+            if (config.signed === "S") {
+                value = buffer.readInt16BE();
+            } else {
+                for (let i = 0; i < data.length; i++) {
+                    value += data[i] << (i * 16);
+                }
             }
 
             return value / (1 / config.rate);
@@ -123,7 +138,7 @@ export class EASUN {
         if (config.sel) {
             const item = config.sel.item.find(item => item.no === num);
             if (item) {
-                stringNum = `${item.ename} (${stringNum})`;
+                stringNum = `${item.name} (${stringNum})`;
             }
         }
 
@@ -168,21 +183,21 @@ export class EASUN {
             unit: "",
             name: "Main page log"
         },
-        SoftwareVersion1: {
+        APPVersion: {
             address: 20,
             len: 1,
-            rate: 1,
-            format: "%d",
-            unit: "V",
-            name: "Software version 1"
+            rate: 0.01,
+            format: "%.2f",
+            unit: "",
+            name: "APP version"
         },
-        SoftwareVersion2: {
+        BootloaderVersion: {
             address: 21,
             len: 1,
-            rate: 1,
-            format: "%d",
+            rate: 0.01,
+            format: "%.2f",
             unit: "V",
-            name: "Software version 2"
+            name: "Bootloader software version"
         },
         CompileTime: {
             address: 33,
@@ -247,7 +262,241 @@ export class EASUN {
             rate: 1,
             format: "%d",
             unit: "",
-            name: "Current fault"
+            name: "Current fault",
+            sel: {
+                item: [
+                    {
+                        no: 0,
+                        name: "NoFault",
+                        desc: "No fault"
+                    },
+                    {
+                        no: 1,
+                        name: "BatVoltLow",
+                        desc: "Battery undervoltage alarm"
+                    },
+                    {
+                        no: 2,
+                        name: "BatOverCurrSw",
+                        desc: "Battery discharge average current overcurrent software protection"
+                    },
+                    {
+                        no: 3,
+                        name: "BatOpen",
+                        desc: "Battery not-connected alarm"
+                    },
+                    {
+                        no: 4,
+                        name: "BatLowEod",
+                        desc: "Battery undervoltage stop discharge alarm"
+                    },
+                    {
+                        no: 5,
+                        name: "BatOverCurrHw",
+                        desc: "Battery overcurrent hardware protection"
+                    },
+                    {
+                        no: 6,
+                        name: "BatOverVolt",
+                        desc: "Charging overvoltage protection"
+                    },
+                    {
+                        no: 7,
+                        name: "BusOverVoltHw",
+                        desc: "Bus overvoltage hardware protection"
+                    },
+                    {
+                        no: 8,
+                        name: "BusOverVoltSw",
+                        desc: "Bus overvoltage software protection"
+                    },
+                    {
+                        no: 9,
+                        name: "PvVoltHigh",
+                        desc: "PV overvoltage protection"
+                    },
+                    {
+                        no: 10,
+                        name: "PvBuckOCSw",
+                        desc: "Buck overcurrent software protection"
+                    },
+                    {
+                        no: 11,
+                        name: "PvBuckOCHw",
+                        desc: "Buck overcurrent hardware protection"
+                    },
+                    {
+                        no: 12,
+                        name: "bLineLoss",
+                        desc: "Mains power down"
+                    },
+                    {
+                        no: 13,
+                        name: "OverloadBypass",
+                        desc: "Bypass overload protection"
+                    },
+                    {
+                        no: 14,
+                        name: "OverloadInverter",
+                        desc: "Inverter overload protection"
+                    },
+                    {
+                        no: 15,
+                        name: "AcOverCurrHw",
+                        desc: "Inverter overcurrent hardware protection"
+                    },
+                    {
+                        no: 17,
+                        name: "InvShort",
+                        desc: "Inverter short circuit protection"
+                    },
+                    {
+                        no: 19,
+                        name: "OverTemperMppt",
+                        desc: "Buck heat sink over temperature protection"
+                    },
+                    {
+                        no: 20,
+                        name: "OverTemperInv",
+                        desc: "Inverter heat sink over temperature protection"
+                    },
+                    {
+                        no: 21,
+                        name: "FanFail",
+                        desc: "Fan failure"
+                    },
+                    {
+                        no: 22,
+                        name: "EEPROM",
+                        desc: "Memory failure"
+                    },
+                    {
+                        no: 23,
+                        name: "ModelNumErr",
+                        desc: "Model setting error"
+                    },
+                    {
+                        no: 26,
+                        name: "RlyShort",
+                        desc: "Inverted AC Output Backfills to Bypass AC Input"
+                    },
+                    {
+                        no: 29,
+                        name: "BusLow",
+                        desc: "Internal battery boost circuit failure"
+                    },
+                    {
+                        no: 30,
+                        name: "BatteryUnder10%",
+                        desc: "The battery capacity is lower than 10%"
+                    },
+                    {
+                        no: 31,
+                        name: "BatteryUnder5%",
+                        desc: "The battery capacity is lower than 5%"
+                    },
+                    {
+                        no: 32,
+                        name: "LowBatShutdown",
+                        desc: "Low battery capacity shutdown"
+                    },
+                    {
+                        no: 34,
+                        name: "CANFaultParallelSys",
+                        desc: "CAN communication fault of parallel system"
+                    },
+                    {
+                        no: 35,
+                        name: "IncorrectParallelID",
+                        desc: "The parallel ID is incorrect"
+                    },
+                    {
+                        no: 36,
+                        name: "ParallelSyncShutdown",
+                        desc: "Parallel machine synchronous shutdown"
+                    },
+                    {
+                        no: 37,
+                        name: "ParallelShareCurrentErr",
+                        desc: "Parallel share current error"
+                    },
+                    {
+                        no: 38,
+                        name: "ParallelBatVoltDiff",
+                        desc: "The battery voltage difference in parallel mode is too large"
+                    },
+                    {
+                        no: 39,
+                        name: "ParallelMains",
+                        desc: "The mains input source in parallel mode is inconsistent"
+                    },
+                    {
+                        no: 40,
+                        name: "ParallelHWSyncSignal",
+                        desc: "Hardware synchronization signal in parallel mode is faulty"
+                    },
+                    {
+                        no: 41,
+                        name: "InverterDCVolt",
+                        desc: "The DC component of the inverter voltage is abnormal"
+                    },
+                    {
+                        no: 42,
+                        name: "ParallelVer",
+                        desc: "The parallel program version is inconsistent"
+                    },
+                    {
+                        no: 43,
+                        name: "ParallelConnection",
+                        desc: "The parallel connection in parallel mode is faulty"
+                    },
+                    {
+                        no: 44,
+                        name: "SerialNumErr",
+                        desc: "Incorrect serial number information"
+                    },
+                    {
+                        no: 45,
+                        name: "PArallelModeErr",
+                        desc: "The parallel mode is incorrectly set"
+                    },
+                    {
+                        no: 58,
+                        name: "BMSComErr",
+                        desc: "The BMS communication is faulty"
+                    },
+                    {
+                        no: 59,
+                        name: "BMSMinorErr",
+                        desc: "BMS minor fault"
+                    },
+                    {
+                        no: 60,
+                        name: "BMSUnderTemp",
+                        desc: "BMS under temperature"
+                    },
+                    {
+                        no: 61,
+                        name: "BMSOverTemp",
+                        desc: "BMS over temperature"
+                    },
+                    {
+                        no: 62,
+                        name: "BMSOverCurrent",
+                        desc: "BMS over current"
+                    },
+                    {
+                        no: 63,
+                        name: "BMSUnderVoltage",
+                        desc: "BMS under voltage"
+                    },
+                    {
+                        no: 64,
+                        name: "BMSOverVoltage",
+                        desc: "BMS over voltage"
+                    },
+                ]
+            }
         },
         PVVoltage1: {
             address: 263,
@@ -307,59 +556,59 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "User def"
+                        name: "User def"
                     },
                     {
                         no: 1,
-                        ename: "SLD"
+                        name: "SLD"
                     },
                     {
                         no: 2,
-                        ename: "FLD"
+                        name: "FLD"
                     },
                     {
                         no: 3,
-                        ename: "GEL"
+                        name: "GEL"
                     },
                     {
                         no: 4,
-                        ename: "LF14"
+                        name: "LF14"
                     },
                     {
                         no: 5,
-                        ename: "LF15"
+                        name: "LF15"
                     },
                     {
                         no: 6,
-                        ename: "LF16"
+                        name: "LF16"
                     },
                     {
                         no: 7,
-                        ename: "LF7"
+                        name: "LF7"
                     },
                     {
                         no: 8,
-                        ename: "LF8"
+                        name: "LF8"
                     },
                     {
                         no: 9,
-                        ename: "LF9"
+                        name: "LF9"
                     },
                     {
                         no: 10,
-                        ename: "NCA7"
+                        name: "NCA7"
                     },
                     {
                         no: 11,
-                        ename: "NCA8"
+                        name: "NCA8"
                     },
                     {
                         no: 12,
-                        ename: "NCA13"
+                        name: "NCA13"
                     },
                     {
                         no: 13,
-                        ename: "NCA14"
+                        name: "NCA14"
                     }
                 ]
             },
@@ -493,51 +742,51 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Power on"
+                        name: "Power on"
                     },
                     {
                         no: 1,
-                        ename: "Stand by"
+                        name: "Stand by"
                     },
                     {
                         no: 2,
-                        ename: "Initialization"
+                        name: "Initialization"
                     },
                     {
                         no: 3,
-                        ename: "Soft start"
+                        name: "Soft start"
                     },
                     {
                         no: 4,
-                        ename: "Running in line"
+                        name: "Running in line"
                     },
                     {
                         no: 5,
-                        ename: "Running in inverter"
+                        name: "Running in inverter"
                     },
                     {
                         no: 6,
-                        ename: "Invert to line"
+                        name: "Invert to line"
                     },
                     {
                         no: 7,
-                        ename: "Line to invert"
+                        name: "Line to invert"
                     },
                     {
                         no: 8,
-                        ename: "remain"
+                        name: "remain"
                     },
                     {
                         no: 9,
-                        ename: "remain"
+                        name: "remain"
                     },
                     {
                         no: 10,
-                        ename: "Shutdown"
+                        name: "Shutdown"
                     },
                     {
                         no: 11,
-                        ename: "Fault"
+                        name: "Fault"
                     }
                 ]
             },
@@ -553,35 +802,35 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Not start"
+                        name: "Not start"
                     },
                     {
                         no: 1,
-                        ename: "Const current"
+                        name: "Const current"
                     },
                     {
                         no: 2,
-                        ename: "Const voltage"
+                        name: "Const voltage"
                     },
                     {
                         no: 3,
-                        ename: "reserved"
+                        name: "reserved"
                     },
                     {
                         no: 4,
-                        ename: "Float charge"
+                        name: "Float charge"
                     },
                     {
                         no: 5,
-                        ename: "reserved"
+                        name: "reserved"
                     },
                     {
                         no: 6,
-                        ename: "Active charge"
+                        name: "Active charge"
                     },
                     {
                         no: 7,
-                        ename: "Active charge"
+                        name: "Active charge"
                     }
                 ]
             },
@@ -597,15 +846,15 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "PV first"
+                        name: "PV first"
                     },
                     {
                         no: 1,
-                        ename: "Mains first"
+                        name: "Mains first"
                     },
                     {
                         no: 2,
-                        ename: "Battery first"
+                        name: "Battery first"
                     }
                 ]
             },
@@ -655,11 +904,11 @@ export class EASUN {
                 item: [
                     {
                         no: 50,
-                        ename: "50 Hz"
+                        name: "50 Hz"
                     },
                     {
                         no: 60,
-                        ename: "60 Hz"
+                        name: "60 Hz"
                     }
                 ]
             }
@@ -675,11 +924,11 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "APL"
+                        name: "APL"
                     },
                     {
                         no: 1,
-                        ename: "UPS"
+                        name: "UPS"
                     }
                 ]
             }
@@ -711,19 +960,19 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "PV first"
+                        name: "PV first"
                     },
                     {
                         no: 1,
-                        ename: "Mains first"
+                        name: "Mains first"
                     },
                     {
                         no: 2,
-                        ename: "PV and Mains"
+                        name: "PV and Mains"
                     },
                     {
                         no: 3,
-                        ename: "Only PV"
+                        name: "Only PV"
                     }
                 ]
             }
@@ -803,11 +1052,11 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Disable"
+                        name: "Disable"
                     },
                     {
                         no: 1,
-                        ename: "Enable"
+                        name: "Enable"
                     }
                 ]
             }
@@ -855,11 +1104,11 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Disable"
+                        name: "Disable"
                     },
                     {
                         no: 1,
-                        ename: "Enable"
+                        name: "Enable"
                     }
                 ]
             }
@@ -875,11 +1124,11 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Disable"
+                        name: "Disable"
                     },
                     {
                         no: 1,
-                        ename: "Enable"
+                        name: "Enable"
                     }
                 ]
             }
@@ -895,11 +1144,11 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Disable"
+                        name: "Disable"
                     },
                     {
                         no: 1,
-                        ename: "Enable"
+                        name: "Enable"
                     }
                 ]
             }
@@ -915,11 +1164,11 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Disable"
+                        name: "Disable"
                     },
                     {
                         no: 1,
-                        ename: "Enable"
+                        name: "Enable"
                     }
                 ]
             }
@@ -935,11 +1184,11 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Disable"
+                        name: "Disable"
                     },
                     {
                         no: 1,
-                        ename: "Enable"
+                        name: "Enable"
                     }
                 ]
             }
@@ -955,11 +1204,11 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Disable"
+                        name: "Disable"
                     },
                     {
                         no: 1,
-                        ename: "Enable"
+                        name: "Enable"
                     }
                 ]
             }
@@ -975,11 +1224,11 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Disable"
+                        name: "Disable"
                     },
                     {
                         no: 1,
-                        ename: "Enable"
+                        name: "Enable"
                     }
                 ]
             }
@@ -1003,11 +1252,11 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Disable"
+                        name: "Disable"
                     },
                     {
                         no: 1,
-                        ename: "Enable"
+                        name: "Enable"
                     }
                 ]
             }
@@ -1031,35 +1280,35 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Stand-alone"
+                        name: "Stand-alone"
                     },
                     {
                         no: 1,
-                        ename: "Parallel-single phase"
+                        name: "Parallel-single phase"
                     },
                     {
                         no: 2,
-                        ename: "Parallel-split phase 0°"
+                        name: "Parallel-split phase 0°"
                     },
                     {
                         no: 3,
-                        ename: "Parallel-split phase 120°"
+                        name: "Parallel-split phase 120°"
                     },
                     {
                         no: 4,
-                        ename: "Parallel-split phase 180°"
+                        name: "Parallel-split phase 180°"
                     },
                     {
                         no: 5,
-                        ename: "Parallel-three phase A"
+                        name: "Parallel-three phase A"
                     },
                     {
                         no: 6,
-                        ename: "Parallel-three phase B"
+                        name: "Parallel-three phase B"
                     },
                     {
                         no: 7,
-                        ename: "Parallel-three phase C"
+                        name: "Parallel-three phase C"
                     }
                 ]
             }
@@ -1075,15 +1324,15 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Disable"
+                        name: "Disable"
                     },
                     {
                         no: 1,
-                        ename: "458 BMS"
+                        name: "458 BMS"
                     },
                     {
                         no: 2,
-                        ename: "CAN BMS"
+                        name: "CAN BMS"
                     }
                 ]
             }
@@ -1099,47 +1348,47 @@ export class EASUN {
                 item: [
                     {
                         no: 0,
-                        ename: "Pace"
+                        name: "Pace"
                     },
                     {
                         no: 1,
-                        ename: "Rata"
+                        name: "Rata"
                     },
                     {
                         no: 2,
-                        ename: "Allgrand"
+                        name: "Allgrand"
                     },
                     {
                         no: 3,
-                        ename: "Oliter"
+                        name: "Oliter"
                     },
                     {
                         no: 4,
-                        ename: "PCT"
+                        name: "PCT"
                     },
                     {
                         no: 5,
-                        ename: "Sunwoda"
+                        name: "Sunwoda"
                     },
                     {
                         no: 6,
-                        ename: "Dyness"
+                        name: "Dyness"
                     },
                     {
                         no: 7,
-                        ename: "WOW"
+                        name: "WOW"
                     },
                     {
                         no: 8,
-                        ename: "Pylontech"
+                        name: "Pylontech"
                     },
                     {
                         no: 16,
-                        ename: "WS Technicals"
+                        name: "WS Technicals"
                     },
                     {
                         no: 17,
-                        ename: "Uz Energy"
+                        name: "Uz Energy"
                     }
                 ]
             }
@@ -1426,12 +1675,12 @@ export class EASUN {
     //     return this.readNumber(ModbusDevice.ValueConfig.MainPageLog);
     // }
 
-    getSoftwareVersion1(): Promise<number | void> {
-        return this._readNumber(EASUN.ValueConfig.SoftwareVersion1);
+    getAPPVersion(): Promise<number | void> {
+        return this._readNumber(EASUN.ValueConfig.APPVersion);
     }
 
-    getSoftwareVersion2(): Promise<number | void> {
-        return this._readNumber(EASUN.ValueConfig.SoftwareVersion2);
+    getBootloaderVersion(): Promise<number | void> {
+        return this._readNumber(EASUN.ValueConfig.BootloaderVersion);
     }
 
     getCompileTime(): Promise<string | void> {
@@ -1472,9 +1721,15 @@ export class EASUN {
         return this._readNumber(EASUN.ValueConfig.LoadStatus);
     }
 
-    // getCurrentFault(): Promise<number | void> {
-    //     return this.readNumber(ModbusDevice.ValueConfig.CurrentFault);
-    // }
+    async getCurrentFault(): Promise<number | void> {
+        const result = await this._readAddress(EASUN.ValueConfig.CurrentFault);
+
+        if (result) {
+            // The fault code is stored in 4 bytes but we only really need the last one (I think)
+            const value = result.buffer.readUint8(3);
+            return value;
+        }
+    }
 
     getPVVoltage1(format?: false): Promise<number | void>;
     getPVVoltage1(format?: true): Promise<string | void>;

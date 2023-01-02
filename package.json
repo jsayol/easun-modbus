@@ -11,7 +11,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "modbus-serial": "^8.0.8"
+    "modbus-serial": "^8.0.8",
+    "rewiremock": "^3.14.4"
   },
   "devDependencies": {
     "@types/node": "^18.11.18",

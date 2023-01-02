@@ -11,12 +11,12 @@ interface AddressConfig {
     sel?: {
         item: Array<{
             no: number;
-            ename: string | number;
+            name: string | number;
+            desc?: string;
         }>;
     };
 }
 export declare class EASUN {
-    private port;
     private options;
     private static MODBUSID;
     private static MINWAIT;
@@ -25,8 +25,9 @@ export declare class EASUN {
     private client;
     private lastOp;
     static sleep(ms: number): Promise<unknown>;
-    constructor(port: string, options?: SerialPortOptions);
-    connect(): Promise<void>;
+    constructor(options?: SerialPortOptions);
+    connectSerial(port: string): Promise<void>;
+    connectWifiDevice(wifiIP: string, localIP: string): Promise<void>;
     onDisconnect(callback: () => any): void;
     get timeout(): number;
     set timeout(value: number);
@@ -46,8 +47,8 @@ export declare class EASUN {
     };
     private _getNumberValue;
     /** Information */
-    getSoftwareVersion1(): Promise<number | void>;
-    getSoftwareVersion2(): Promise<number | void>;
+    getAPPVersion(): Promise<number | void>;
+    getBootloaderVersion(): Promise<number | void>;
     getCompileTime(): Promise<string | void>;
     getProductSN(): Promise<string | void>;
     getPowerRate(format?: false): Promise<number | void>;
@@ -58,6 +59,7 @@ export declare class EASUN {
     getLineStatus(): Promise<number | void>;
     getBatteryStatus(): Promise<number | void>;
     getLoadStatus(): Promise<number | void>;
+    getCurrentFault(): Promise<number | void>;
     getPVVoltage1(format?: false): Promise<number | void>;
     getPVVoltage1(format?: true): Promise<string | void>;
     getPVCurrent(format?: false): Promise<number | void>;
@@ -211,7 +213,7 @@ export declare class EASUN {
     getSystemDateTime(format?: false): Promise<Array<number> | void>;
     getSystemDateTime(format?: true): Promise<Date | void>;
     /**
-     * @returns How many bytes (registers?) were written. Should be 6 (3?)
+     * @returns How many registers were written. Should be 3
      */
     setSystemDateTime(value: Array<number>): Promise<number | void>;
     setSystemDateTime(value: Date): Promise<number | void>;

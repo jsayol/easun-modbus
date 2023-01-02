@@ -1,4 +1,27 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -6,25 +29,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EASUN = void 0;
 const util_1 = __importDefault(require("util"));
 const modbus_serial_1 = __importDefault(require("modbus-serial"));
-function assert(condition, errMsg) {
-    if (!condition) {
-        throw new Error(errMsg);
-    }
-}
+const utils_1 = require("./utils");
+const wifi_1 = require("./wifi");
+const MockSerialPort = __importStar(require("./wifi/mock-serialport"));
 class EASUN {
     static sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
-    constructor(port, options = {}) {
-        this.port = port;
+    constructor(options = {}) {
         this.options = options;
         this.lastOp = Date.now();
         this.client = new modbus_serial_1.default();
-    }
-    async connect() {
         this.client.setTimeout(EASUN.DEFAULT_TIMEOUT);
         this.client.setID(EASUN.MODBUSID);
-        await this.client.connectRTUBuffered(this.port, { ...EASUN.DEFAULT_OPTIONS, ...this.options });
+    }
+    async connectSerial(port) {
+        MockSerialPort.disable();
+        await this.client.connectRTUBuffered(port, { ...EASUN.DEFAULT_OPTIONS, ...this.options });
+    }
+    async connectWifiDevice(wifiIP, localIP) {
+        MockSerialPort.enable();
+        await (0, wifi_1.setupEasunWifiConnection)(wifiIP, localIP);
+        await this.client.connectRTUBuffered("", { ...EASUN.DEFAULT_OPTIONS, ...this.options });
     }
     onDisconnect(callback) {
         this.client.on("close", callback);
@@ -54,8 +80,13 @@ class EASUN {
         if (result) {
             const { data, buffer } = result;
             let value = 0;
-            for (let i = 0; i < data.length; i++) {
-                value += data[i] << (i * 16);
+            if (config.signed === "S") {
+                value = buffer.readInt16BE();
+            }
+            else {
+                for (let i = 0; i < data.length; i++) {
+                    value += data[i] << (i * 16);
+                }
             }
             return value / (1 / config.rate);
         }
@@ -85,7 +116,7 @@ class EASUN {
         if (config.sel) {
             const item = config.sel.item.find(item => item.no === num);
             if (item) {
-                stringNum = `${item.ename} (${stringNum})`;
+                stringNum = `${item.name} (${stringNum})`;
             }
         }
         return stringNum;
@@ -129,11 +160,11 @@ class EASUN {
     // getMainPageLog(): Promise<number | void> {
     //     return this.readNumber(ModbusDevice.ValueConfig.MainPageLog);
     // }
-    getSoftwareVersion1() {
-        return this._readNumber(EASUN.ValueConfig.SoftwareVersion1);
+    getAPPVersion() {
+        return this._readNumber(EASUN.ValueConfig.APPVersion);
     }
-    getSoftwareVersion2() {
-        return this._readNumber(EASUN.ValueConfig.SoftwareVersion2);
+    getBootloaderVersion() {
+        return this._readNumber(EASUN.ValueConfig.BootloaderVersion);
     }
     getCompileTime() {
         // When trying to read, some times we get a CRC error
@@ -160,6 +191,14 @@ class EASUN {
     }
     getLoadStatus() {
         return this._readNumber(EASUN.ValueConfig.LoadStatus);
+    }
+    async getCurrentFault() {
+        const result = await this._readAddress(EASUN.ValueConfig.CurrentFault);
+        if (result) {
+            // The fault code is stored in 4 bytes but we only really need the last one (I think)
+            const value = result.buffer.readUint8(3);
+            return value;
+        }
     }
     getPVVoltage1(format = false) {
         return this._getNumberValue(format, EASUN.ValueConfig.PVVoltage1);
@@ -608,12 +647,12 @@ class EASUN {
             }
         }
         if (Array.isArray(value)) {
-            assert(value.length === 6, "Value must be an array of 6 numbers");
-            assert(value[1] >= 0 && value[1] < 12, "Month must be between 0 and 11");
-            assert(value[2] > 0 && value[2] <= 31, "Day must be between 1 and 31");
-            assert(value[3] >= 0 && value[3] < 24, "Hour must be between 0 and 23");
-            assert(value[4] >= 0 && value[4] < 60, "Minute must be between 0 and 59");
-            assert(value[5] >= 0 && value[5] < 60, "Second must be between 0 and 59");
+            (0, utils_1.assert)(value.length === 6, "Value must be an array of 6 numbers");
+            (0, utils_1.assert)(value[1] >= 0 && value[1] < 12, "Month must be between 0 and 11");
+            (0, utils_1.assert)(value[2] > 0 && value[2] <= 31, "Day must be between 1 and 31");
+            (0, utils_1.assert)(value[3] >= 0 && value[3] < 24, "Hour must be between 0 and 23");
+            (0, utils_1.assert)(value[4] >= 0 && value[4] < 60, "Minute must be between 0 and 59");
+            (0, utils_1.assert)(value[5] >= 0 && value[5] < 60, "Second must be between 0 and 59");
             arrValues = value;
         }
         else if (value instanceof Date) {
@@ -783,21 +822,21 @@ EASUN.ValueConfig = {
         unit: "",
         name: "Main page log"
     },
-    SoftwareVersion1: {
+    APPVersion: {
         address: 20,
         len: 1,
-        rate: 1,
-        format: "%d",
-        unit: "V",
-        name: "Software version 1"
+        rate: 0.01,
+        format: "%.2f",
+        unit: "",
+        name: "APP version"
     },
-    SoftwareVersion2: {
+    BootloaderVersion: {
         address: 21,
         len: 1,
-        rate: 1,
-        format: "%d",
+        rate: 0.01,
+        format: "%.2f",
         unit: "V",
-        name: "Software version 2"
+        name: "Bootloader software version"
     },
     CompileTime: {
         address: 33,
@@ -862,7 +901,241 @@ EASUN.ValueConfig = {
         rate: 1,
         format: "%d",
         unit: "",
-        name: "Current fault"
+        name: "Current fault",
+        sel: {
+            item: [
+                {
+                    no: 0,
+                    name: "NoFault",
+                    desc: "No fault"
+                },
+                {
+                    no: 1,
+                    name: "BatVoltLow",
+                    desc: "Battery undervoltage alarm"
+                },
+                {
+                    no: 2,
+                    name: "BatOverCurrSw",
+                    desc: "Battery discharge average current overcurrent software protection"
+                },
+                {
+                    no: 3,
+                    name: "BatOpen",
+                    desc: "Battery not-connected alarm"
+                },
+                {
+                    no: 4,
+                    name: "BatLowEod",
+                    desc: "Battery undervoltage stop discharge alarm"
+                },
+                {
+                    no: 5,
+                    name: "BatOverCurrHw",
+                    desc: "Battery overcurrent hardware protection"
+                },
+                {
+                    no: 6,
+                    name: "BatOverVolt",
+                    desc: "Charging overvoltage protection"
+                },
+                {
+                    no: 7,
+                    name: "BusOverVoltHw",
+                    desc: "Bus overvoltage hardware protection"
+                },
+                {
+                    no: 8,
+                    name: "BusOverVoltSw",
+                    desc: "Bus overvoltage software protection"
+                },
+                {
+                    no: 9,
+                    name: "PvVoltHigh",
+                    desc: "PV overvoltage protection"
+                },
+                {
+                    no: 10,
+                    name: "PvBuckOCSw",
+                    desc: "Buck overcurrent software protection"
+                },
+                {
+                    no: 11,
+                    name: "PvBuckOCHw",
+                    desc: "Buck overcurrent hardware protection"
+                },
+                {
+                    no: 12,
+                    name: "bLineLoss",
+                    desc: "Mains power down"
+                },
+                {
+                    no: 13,
+                    name: "OverloadBypass",
+                    desc: "Bypass overload protection"
+                },
+                {
+                    no: 14,
+                    name: "OverloadInverter",
+                    desc: "Inverter overload protection"
+                },
+                {
+                    no: 15,
+                    name: "AcOverCurrHw",
+                    desc: "Inverter overcurrent hardware protection"
+                },
+                {
+                    no: 17,
+                    name: "InvShort",
+                    desc: "Inverter short circuit protection"
+                },
+                {
+                    no: 19,
+                    name: "OverTemperMppt",
+                    desc: "Buck heat sink over temperature protection"
+                },
+                {
+                    no: 20,
+                    name: "OverTemperInv",
+                    desc: "Inverter heat sink over temperature protection"
+                },
+                {
+                    no: 21,
+                    name: "FanFail",
+                    desc: "Fan failure"
+                },
+                {
+                    no: 22,
+                    name: "EEPROM",
+                    desc: "Memory failure"
+                },
+                {
+                    no: 23,
+                    name: "ModelNumErr",
+                    desc: "Model setting error"
+                },
+                {
+                    no: 26,
+                    name: "RlyShort",
+                    desc: "Inverted AC Output Backfills to Bypass AC Input"
+                },
+                {
+                    no: 29,
+                    name: "BusLow",
+                    desc: "Internal battery boost circuit failure"
+                },
+                {
+                    no: 30,
+                    name: "BatteryUnder10%",
+                    desc: "The battery capacity is lower than 10%"
+                },
+                {
+                    no: 31,
+                    name: "BatteryUnder5%",
+                    desc: "The battery capacity is lower than 5%"
+                },
+                {
+                    no: 32,
+                    name: "LowBatShutdown",
+                    desc: "Low battery capacity shutdown"
+                },
+                {
+                    no: 34,
+                    name: "CANFaultParallelSys",
+                    desc: "CAN communication fault of parallel system"
+                },
+                {
+                    no: 35,
+                    name: "IncorrectParallelID",
+                    desc: "The parallel ID is incorrect"
+                },
+                {
+                    no: 36,
+                    name: "ParallelSyncShutdown",
+                    desc: "Parallel machine synchronous shutdown"
+                },
+                {
+                    no: 37,
+                    name: "ParallelShareCurrentErr",
+                    desc: "Parallel share current error"
+                },
+                {
+                    no: 38,
+                    name: "ParallelBatVoltDiff",
+                    desc: "The battery voltage difference in parallel mode is too large"
+                },
+                {
+                    no: 39,
+                    name: "ParallelMains",
+                    desc: "The mains input source in parallel mode is inconsistent"
+                },
+                {
+                    no: 40,
+                    name: "ParallelHWSyncSignal",
+                    desc: "Hardware synchronization signal in parallel mode is faulty"
+                },
+                {
+                    no: 41,
+                    name: "InverterDCVolt",
+                    desc: "The DC component of the inverter voltage is abnormal"
+                },
+                {
+                    no: 42,
+                    name: "ParallelVer",
+                    desc: "The parallel program version is inconsistent"
+                },
+                {
+                    no: 43,
+                    name: "ParallelConnection",
+                    desc: "The parallel connection in parallel mode is faulty"
+                },
+                {
+                    no: 44,
+                    name: "SerialNumErr",
+                    desc: "Incorrect serial number information"
+                },
+                {
+                    no: 45,
+                    name: "PArallelModeErr",
+                    desc: "The parallel mode is incorrectly set"
+                },
+                {
+                    no: 58,
+                    name: "BMSComErr",
+                    desc: "The BMS communication is faulty"
+                },
+                {
+                    no: 59,
+                    name: "BMSMinorErr",
+                    desc: "BMS minor fault"
+                },
+                {
+                    no: 60,
+                    name: "BMSUnderTemp",
+                    desc: "BMS under temperature"
+                },
+                {
+                    no: 61,
+                    name: "BMSOverTemp",
+                    desc: "BMS over temperature"
+                },
+                {
+                    no: 62,
+                    name: "BMSOverCurrent",
+                    desc: "BMS over current"
+                },
+                {
+                    no: 63,
+                    name: "BMSUnderVoltage",
+                    desc: "BMS under voltage"
+                },
+                {
+                    no: 64,
+                    name: "BMSOverVoltage",
+                    desc: "BMS over voltage"
+                },
+            ]
+        }
     },
     PVVoltage1: {
         address: 263,
@@ -922,59 +1195,59 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "User def"
+                    name: "User def"
                 },
                 {
                     no: 1,
-                    ename: "SLD"
+                    name: "SLD"
                 },
                 {
                     no: 2,
-                    ename: "FLD"
+                    name: "FLD"
                 },
                 {
                     no: 3,
-                    ename: "GEL"
+                    name: "GEL"
                 },
                 {
                     no: 4,
-                    ename: "LF14"
+                    name: "LF14"
                 },
                 {
                     no: 5,
-                    ename: "LF15"
+                    name: "LF15"
                 },
                 {
                     no: 6,
-                    ename: "LF16"
+                    name: "LF16"
                 },
                 {
                     no: 7,
-                    ename: "LF7"
+                    name: "LF7"
                 },
                 {
                     no: 8,
-                    ename: "LF8"
+                    name: "LF8"
                 },
                 {
                     no: 9,
-                    ename: "LF9"
+                    name: "LF9"
                 },
                 {
                     no: 10,
-                    ename: "NCA7"
+                    name: "NCA7"
                 },
                 {
                     no: 11,
-                    ename: "NCA8"
+                    name: "NCA8"
                 },
                 {
                     no: 12,
-                    ename: "NCA13"
+                    name: "NCA13"
                 },
                 {
                     no: 13,
-                    ename: "NCA14"
+                    name: "NCA14"
                 }
             ]
         },
@@ -1108,51 +1381,51 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Power on"
+                    name: "Power on"
                 },
                 {
                     no: 1,
-                    ename: "Stand by"
+                    name: "Stand by"
                 },
                 {
                     no: 2,
-                    ename: "Initialization"
+                    name: "Initialization"
                 },
                 {
                     no: 3,
-                    ename: "Soft start"
+                    name: "Soft start"
                 },
                 {
                     no: 4,
-                    ename: "Running in line"
+                    name: "Running in line"
                 },
                 {
                     no: 5,
-                    ename: "Running in inverter"
+                    name: "Running in inverter"
                 },
                 {
                     no: 6,
-                    ename: "Invert to line"
+                    name: "Invert to line"
                 },
                 {
                     no: 7,
-                    ename: "Line to invert"
+                    name: "Line to invert"
                 },
                 {
                     no: 8,
-                    ename: "remain"
+                    name: "remain"
                 },
                 {
                     no: 9,
-                    ename: "remain"
+                    name: "remain"
                 },
                 {
                     no: 10,
-                    ename: "Shutdown"
+                    name: "Shutdown"
                 },
                 {
                     no: 11,
-                    ename: "Fault"
+                    name: "Fault"
                 }
             ]
         },
@@ -1168,35 +1441,35 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Not start"
+                    name: "Not start"
                 },
                 {
                     no: 1,
-                    ename: "Const current"
+                    name: "Const current"
                 },
                 {
                     no: 2,
-                    ename: "Const voltage"
+                    name: "Const voltage"
                 },
                 {
                     no: 3,
-                    ename: "reserved"
+                    name: "reserved"
                 },
                 {
                     no: 4,
-                    ename: "Float charge"
+                    name: "Float charge"
                 },
                 {
                     no: 5,
-                    ename: "reserved"
+                    name: "reserved"
                 },
                 {
                     no: 6,
-                    ename: "Active charge"
+                    name: "Active charge"
                 },
                 {
                     no: 7,
-                    ename: "Active charge"
+                    name: "Active charge"
                 }
             ]
         },
@@ -1212,15 +1485,15 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "PV first"
+                    name: "PV first"
                 },
                 {
                     no: 1,
-                    ename: "Mains first"
+                    name: "Mains first"
                 },
                 {
                     no: 2,
-                    ename: "Battery first"
+                    name: "Battery first"
                 }
             ]
         },
@@ -1270,11 +1543,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 50,
-                    ename: "50 Hz"
+                    name: "50 Hz"
                 },
                 {
                     no: 60,
-                    ename: "60 Hz"
+                    name: "60 Hz"
                 }
             ]
         }
@@ -1290,11 +1563,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "APL"
+                    name: "APL"
                 },
                 {
                     no: 1,
-                    ename: "UPS"
+                    name: "UPS"
                 }
             ]
         }
@@ -1326,19 +1599,19 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "PV first"
+                    name: "PV first"
                 },
                 {
                     no: 1,
-                    ename: "Mains first"
+                    name: "Mains first"
                 },
                 {
                     no: 2,
-                    ename: "PV and Mains"
+                    name: "PV and Mains"
                 },
                 {
                     no: 3,
-                    ename: "Only PV"
+                    name: "Only PV"
                 }
             ]
         }
@@ -1418,11 +1691,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Disable"
+                    name: "Disable"
                 },
                 {
                     no: 1,
-                    ename: "Enable"
+                    name: "Enable"
                 }
             ]
         }
@@ -1470,11 +1743,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Disable"
+                    name: "Disable"
                 },
                 {
                     no: 1,
-                    ename: "Enable"
+                    name: "Enable"
                 }
             ]
         }
@@ -1490,11 +1763,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Disable"
+                    name: "Disable"
                 },
                 {
                     no: 1,
-                    ename: "Enable"
+                    name: "Enable"
                 }
             ]
         }
@@ -1510,11 +1783,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Disable"
+                    name: "Disable"
                 },
                 {
                     no: 1,
-                    ename: "Enable"
+                    name: "Enable"
                 }
             ]
         }
@@ -1530,11 +1803,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Disable"
+                    name: "Disable"
                 },
                 {
                     no: 1,
-                    ename: "Enable"
+                    name: "Enable"
                 }
             ]
         }
@@ -1550,11 +1823,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Disable"
+                    name: "Disable"
                 },
                 {
                     no: 1,
-                    ename: "Enable"
+                    name: "Enable"
                 }
             ]
         }
@@ -1570,11 +1843,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Disable"
+                    name: "Disable"
                 },
                 {
                     no: 1,
-                    ename: "Enable"
+                    name: "Enable"
                 }
             ]
         }
@@ -1590,11 +1863,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Disable"
+                    name: "Disable"
                 },
                 {
                     no: 1,
-                    ename: "Enable"
+                    name: "Enable"
                 }
             ]
         }
@@ -1618,11 +1891,11 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Disable"
+                    name: "Disable"
                 },
                 {
                     no: 1,
-                    ename: "Enable"
+                    name: "Enable"
                 }
             ]
         }
@@ -1646,35 +1919,35 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Stand-alone"
+                    name: "Stand-alone"
                 },
                 {
                     no: 1,
-                    ename: "Parallel-single phase"
+                    name: "Parallel-single phase"
                 },
                 {
                     no: 2,
-                    ename: "Parallel-split phase 0°"
+                    name: "Parallel-split phase 0°"
                 },
                 {
                     no: 3,
-                    ename: "Parallel-split phase 120°"
+                    name: "Parallel-split phase 120°"
                 },
                 {
                     no: 4,
-                    ename: "Parallel-split phase 180°"
+                    name: "Parallel-split phase 180°"
                 },
                 {
                     no: 5,
-                    ename: "Parallel-three phase A"
+                    name: "Parallel-three phase A"
                 },
                 {
                     no: 6,
-                    ename: "Parallel-three phase B"
+                    name: "Parallel-three phase B"
                 },
                 {
                     no: 7,
-                    ename: "Parallel-three phase C"
+                    name: "Parallel-three phase C"
                 }
             ]
         }
@@ -1690,15 +1963,15 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Disable"
+                    name: "Disable"
                 },
                 {
                     no: 1,
-                    ename: "458 BMS"
+                    name: "458 BMS"
                 },
                 {
                     no: 2,
-                    ename: "CAN BMS"
+                    name: "CAN BMS"
                 }
             ]
         }
@@ -1714,47 +1987,47 @@ EASUN.ValueConfig = {
             item: [
                 {
                     no: 0,
-                    ename: "Pace"
+                    name: "Pace"
                 },
                 {
                     no: 1,
-                    ename: "Rata"
+                    name: "Rata"
                 },
                 {
                     no: 2,
-                    ename: "Allgrand"
+                    name: "Allgrand"
                 },
                 {
                     no: 3,
-                    ename: "Oliter"
+                    name: "Oliter"
                 },
                 {
                     no: 4,
-                    ename: "PCT"
+                    name: "PCT"
                 },
                 {
                     no: 5,
-                    ename: "Sunwoda"
+                    name: "Sunwoda"
                 },
                 {
                     no: 6,
-                    ename: "Dyness"
+                    name: "Dyness"
                 },
                 {
                     no: 7,
-                    ename: "WOW"
+                    name: "WOW"
                 },
                 {
                     no: 8,
-                    ename: "Pylontech"
+                    name: "Pylontech"
                 },
                 {
                     no: 16,
-                    ename: "WS Technicals"
+                    name: "WS Technicals"
                 },
                 {
                     no: 17,
-                    ename: "Uz Energy"
+                    name: "Uz Energy"
                 }
             ]
         }
